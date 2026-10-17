@@ -13,3 +13,4 @@
 | [ADR-0005](./0005-travel-and-prep-buffers-in-schedule-conflict-detection.md) | 移動・準備バッファ（Travel Buffer）を考慮した日程重複・過密判定アルゴリズム | 承認 (Accepted) | 2026-10-17 |
 | [ADR-0006](./0006-rdb-persistence-with-transactional-full-replace-for-child-entities.md) | RDB（PostgreSQL）永続化と子エンティティのトランザクション内全削除・一括再挿入方針 | 承認 (Accepted) | 2026-10-17 |
 | [ADR-0007](./0007-pure-typescript-domain-with-result-type-and-event-bus.md) | 外部非依存の純粋 TypeScript ドメイン層、Result 型エラーハンドリング、およびドメインイベントバス | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0008](./0008-schema-first-openapi-and-code-generation.md) | Schema-First (OpenAPI 3.1) アプローチと openapi-typescript による型自動生成 | 承認 (Accepted) | 2026-10-17 |

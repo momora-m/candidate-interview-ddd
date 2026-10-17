@@ -106,6 +106,16 @@ API サーバーを起動（`npm run api`）後、以下のURLにアクセスす
 npm install
 ```
 
+### 依存関係の脆弱性スキャン
+`next` は Vite へ移行した後も残っていたため外しました。スキャンはロックファイルに対する `npm audit` と、レジストリ署名の `npm audit signatures` です。
+
+```bash
+npm install -g npm@11.10.0
+npm run security:check
+```
+
+`.npmrc` の `min-release-age=7` は、新規に解決するパッケージを公開から 7 日経つまで入れない設定です。npm 11.10.0 以降で有効になります。既存の `package-lock.json` を `npm ci` で入れるときは、ロック済みの版をそのまま使います。Dependabot も同じ 7 日の cooldown で更新します。毎週のスキャンは `.github/workflows/npm-audit.yml` です。
+
 ### 単体テストの実行 (tsx test runner)
 ```bash
 npm test

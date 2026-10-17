@@ -1,0 +1,15 @@
+# アーキテクチャ決定記録 (Architecture Decision Records: ADR)
+
+本リポジトリにおけるドメイン駆動設計（DDD）およびシステムアーキテクチャ上の主要な設計判断の記録です。
+
+## インデックス
+
+| ID | タイトル | ステータス | 決定日 |
+| :--- | :--- | :--- | :--- |
+| [ADR-0001](./0001-candidate-centric-domain-modeling.md) | 候補者（求職者自身）視点でのドメインモデリングへの転換 | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0002](./0002-separate-target-company-and-job-application-aggregates.md) | 志望企業（TargetCompany）と選考応募（JobApplication）の集約境界分離 | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0003](./0003-placement-of-position-motivation-in-job-application.md) | 志望動機（PositionMotivation）の JobApplication 集約への配置 | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0004](./0004-reverse-questions-as-immutable-vo-snapshot-copy.md) | 逆質問の面接割当における「不変スナップショットコピー（VO）」方式の採用 | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0005](./0005-travel-and-prep-buffers-in-schedule-conflict-detection.md) | 移動・準備バッファ（Travel Buffer）を考慮した日程重複・過密判定アルゴリズム | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0006](./0006-rdb-persistence-with-transactional-full-replace-for-child-entities.md) | RDB（PostgreSQL）永続化と子エンティティのトランザクション内全削除・一括再挿入方針 | 承認 (Accepted) | 2026-10-17 |
+| [ADR-0007](./0007-pure-typescript-domain-with-result-type-and-event-bus.md) | 外部非依存の純粋 TypeScript ドメイン層、Result 型エラーハンドリング、およびドメインイベントバス | 承認 (Accepted) | 2026-10-17 |

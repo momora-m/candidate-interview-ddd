@@ -57,6 +57,22 @@
 
 ---
 
+## 5. アーキテクチャ決定記録 (ADR)
+
+設計上の重要判断、背景、およびトレードオフは `docs/adr/` に Architecture Decision Records として文書化されています。
+
+- [ADR-0001: 候補者（求職者自身）視点でのドメインモデリングへの転換](docs/adr/0001-candidate-centric-domain-modeling.md)
+- [ADR-0002: 志望企業（TargetCompany）と選考応募（JobApplication）の集約境界分離](docs/adr/0002-separate-target-company-and-job-application-aggregates.md)
+- [ADR-0003: 志望動機（PositionMotivation）の JobApplication 集約への配置](docs/adr/0003-placement-of-position-motivation-in-job-application.md)
+- [ADR-0004: 逆質問の面接割当における「不変スナップショットコピー（VO）」方式の採用](docs/adr/0004-reverse-questions-as-immutable-vo-snapshot-copy.md)
+- [ADR-0005: 移動・準備バッファ（Travel Buffer）を考慮した日程重複・過密判定アルゴリズム](docs/adr/0005-travel-and-prep-buffers-in-schedule-conflict-detection.md)
+- [ADR-0006: RDB（PostgreSQL）永続化と子エンティティのトランザクション内全削除・一括再挿入方針](docs/adr/0006-rdb-persistence-with-transactional-full-replace-for-child-entities.md)
+- [ADR-0007: 外部非依存の純粋 TypeScript ドメイン層、Result 型エラーハンドリング、およびドメインイベントバス](docs/adr/0007-pure-typescript-domain-with-result-type-and-event-bus.md)
+
+詳細は [docs/adr/README.md](docs/adr/README.md) を参照してください。
+
+---
+
 ## 4. ローカル起動とテスト実行方法
 
 ### 依存関係のインストール

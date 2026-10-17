@@ -28,6 +28,9 @@
     └── PostgresTargetCompanyRepository / PostgresJobApplicationRepository
           └── 集約保存時に子行をトランザクション内で全削除・再挿入 (ADR-0006)
 
+[ HTTP API ]
+    └── Hono + Zod（ユースケースをそのまま呼ぶ。ORM は使わない）
+
 [ Presentation Layer ]
     └── React 19 + Vite 6 + Tailwind CSS SPA
 ```
@@ -100,6 +103,28 @@ DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview 
 ```
 
 `npm run db:migrate` は `db/migrations/001_initial.sql` を適用します。画面のプロトタイプは引き続きインメモリリポジトリを使います。
+
+### API サーバー (Hono)
+```bash
+npm run api
+```
+`DATABASE_URL` が無いときはインメモリリポジトリで起動し、画面と同じ初期データを投入します。接続文字列があるときは PostgreSQL リポジトリを使います。
+
+```bash
+DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run api
+```
+
+待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。
+
+型だけ共有するクライアントの例:
+
+```ts
+import { hc } from 'hono/client';
+import type { AppType } from './src/api/app';
+
+const client = hc<AppType>('http://127.0.0.1:4317');
+const companies = await client.api.companies.$get();
+```
 
 ### 開発サーバーの起動 (Vite)
 ```bash

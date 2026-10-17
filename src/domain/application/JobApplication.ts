@@ -1,0 +1,556 @@
+import { AggregateRoot } from '../shared/AggregateRoot';
+import { Result } from '../shared/Result';
+import { ApplicationId } from './ApplicationId';
+import { CompanyId } from '../company/CompanyId';
+import { PositionDetails } from './PositionDetails';
+import { PositionMotivation } from './PositionMotivation';
+import { SelectionStage, StageCode } from './SelectionStage';
+import { ApplicationStatus, ApplicationStatusCode } from './ApplicationStatus';
+import { InterviewSession } from '../interview/InterviewSession';
+import { InterviewSessionId } from '../interview/InterviewSessionId';
+import { TimeWindow } from '../interview/TimeWindow';
+import { InterviewFormat } from '../interview/InterviewFormat';
+import { StockedReverseQuestion } from '../company/StockedReverseQuestion';
+import { AssignedReverseQuestion, InsightRating } from '../interview/AssignedReverseQuestion';
+import { InterviewReflection } from '../interview/InterviewReflection';
+import { PreparationTodo } from '../todo/PreparationTodo';
+import { TodoId } from '../todo/TodoId';
+import { TaskType, TaskTypeCode } from '../todo/TaskType';
+import { TaskStatus } from '../todo/TaskStatus';
+import { TaskPriority } from '../todo/TaskPriority';
+import {
+  InterviewSessionScheduledEvent,
+  InterviewSessionRescheduledEvent,
+  ReverseQuestionAssignedEvent,
+  ReverseQuestionAnswerRecordedEvent,
+  InterviewReflectionRecordedEvent,
+  PreparationTodoCreatedEvent,
+  PreparationTodoStatusChangedEvent,
+  SelectionStageAdvancedEvent,
+  JobApplicationRejectedEvent,
+  JobApplicationWithdrawnEvent,
+  JobApplicationOfferAcceptedEvent,
+} from '../events/CandidateDomainEvents';
+
+export interface JobApplicationProps {
+  id: ApplicationId;
+  companyId: CompanyId;
+  positionDetails: PositionDetails;
+  motivation: PositionMotivation;
+  currentStage: SelectionStage;
+  status: ApplicationStatus;
+  sessions: InterviewSession[];
+  todos: PreparationTodo[];
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class JobApplication extends AggregateRoot<ApplicationId> {
+  private _companyId: CompanyId;
+  private _positionDetails: PositionDetails;
+  private _motivation: PositionMotivation;
+  private _currentStage: SelectionStage;
+  private _status: ApplicationStatus;
+  private _sessions: InterviewSession[];
+  private _todos: PreparationTodo[];
+  private _version: number;
+  private readonly _createdAt: Date;
+  private _updatedAt: Date;
+
+  private constructor(props: JobApplicationProps) {
+    super(props.id);
+    this._companyId = props.companyId;
+    this._positionDetails = props.positionDetails;
+    this._motivation = props.motivation;
+    this._currentStage = props.currentStage;
+    this._status = props.status;
+    this._sessions = props.sessions;
+    this._todos = props.todos;
+    this._version = props.version;
+    this._createdAt = props.createdAt;
+    this._updatedAt = props.updatedAt;
+  }
+
+  public get companyId(): CompanyId {
+    return this._companyId;
+  }
+
+  public get positionDetails(): PositionDetails {
+    return this._positionDetails;
+  }
+
+  public get motivation(): PositionMotivation {
+    return this._motivation;
+  }
+
+  public get currentStage(): SelectionStage {
+    return this._currentStage;
+  }
+
+  public get status(): ApplicationStatus {
+    return this._status;
+  }
+
+  public get sessions(): ReadonlyArray<InterviewSession> {
+    return this._sessions;
+  }
+
+  public get todos(): ReadonlyArray<PreparationTodo> {
+    return this._todos;
+  }
+
+  public get version(): number {
+    return this._version;
+  }
+
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
+
+  public get updatedAt(): Date {
+    return this._updatedAt;
+  }
+
+  public static create(props: {
+    id?: ApplicationId;
+    companyId: CompanyId;
+    positionDetails: PositionDetails;
+    motivation?: PositionMotivation;
+    initialStageCode?: StageCode;
+  }): Result<JobApplication> {
+    const id = props.id || ApplicationId.create().getValue();
+    const stageResult = SelectionStage.create(props.initialStageCode || 'CASUAL_INTERVIEW');
+    if (stageResult.isFailure()) {
+      return Result.fail(stageResult.getError());
+    }
+
+    const motivation = props.motivation || PositionMotivation.create({}).getValue();
+    const now = new Date();
+
+    return Result.ok(
+      new JobApplication({
+        id,
+        companyId: props.companyId,
+        positionDetails: props.positionDetails,
+        motivation,
+        currentStage: stageResult.getValue(),
+        status: ApplicationStatus.inProgress(),
+        sessions: [],
+        todos: [],
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      })
+    );
+  }
+
+  public static hydrate(props: JobApplicationProps): JobApplication {
+    return new JobApplication(props);
+  }
+
+  public updatePositionDetails(newDetails: PositionDetails): void {
+    this._positionDetails = newDetails;
+    this._updatedAt = new Date();
+  }
+
+  public updateMotivation(newMotivation: PositionMotivation): void {
+    this._motivation = newMotivation;
+    this._updatedAt = new Date();
+  }
+
+  /**
+   * Schedule a new interview session for this application and automatically
+   * generate contextual preparation and follow-up tasks.
+   */
+  public scheduleInterview(props: {
+    stage?: SelectionStage;
+    timeWindow: TimeWindow;
+    format: InterviewFormat;
+    interviewerNames?: string[];
+  }): Result<InterviewSession> {
+    if (this._status.isTerminal) {
+      return Result.fail(
+        `既に選考終了（${this._status.label}）となった応募に面接日程を新規登録することはできません。`
+      );
+    }
+
+    const targetStage = props.stage || this._currentStage;
+
+    const sessionResult = InterviewSession.create({
+      stage: targetStage,
+      timeWindow: props.timeWindow,
+      format: props.format,
+      interviewerNames: props.interviewerNames,
+    });
+
+    if (sessionResult.isFailure()) {
+      return Result.fail(sessionResult.getError());
+    }
+
+    const session = sessionResult.getValue();
+    this._sessions.push(session);
+    this._updatedAt = new Date();
+
+    // Auto-generate candidate preparation & reflection tasks
+    this.generateStagePreparationTodos(session);
+
+    this.addDomainEvent(
+      new InterviewSessionScheduledEvent(
+        this.id.value,
+        session.id.value,
+        targetStage.code,
+        props.timeWindow.formatJP(),
+        props.format.getDisplaySummary()
+      )
+    );
+
+    return Result.ok(session);
+  }
+
+  private generateStagePreparationTodos(session: InterviewSession): void {
+    const stageLabel = session.stage.label;
+    const defaultTaskDefs: { type: TaskTypeCode; priority: TaskPriority; title: string }[] = [
+      {
+        type: 'PRE_INTERVIEW_RESEARCH',
+        priority: TaskPriority.high(),
+        title: `【${stageLabel}】企業リサーチ・最新ニュース/技術ブログ確認`,
+      },
+      {
+        type: 'REVERSE_QUESTION_PREP',
+        priority: TaskPriority.high(),
+        title: `【${stageLabel}】逆質問の選定と文脈カスタマイズ`,
+      },
+      {
+        type: 'RESUME_PORTFOLIO_REVIEW',
+        priority: TaskPriority.medium(),
+        title: `【${stageLabel}】アピール実績・想定問答の事前整理`,
+      },
+      {
+        type: 'ATTEND_INTERVIEW',
+        priority: TaskPriority.urgent(),
+        title: `【${stageLabel}】面接本番 (${session.timeWindow.formatJP()})`,
+      },
+      {
+        type: 'POST_INTERVIEW_REFLECTION',
+        priority: TaskPriority.urgent(),
+        title: `【${stageLabel}】面接振り返り・逆質問回答メモの入力`,
+      },
+      {
+        type: 'THANK_YOU_NOTE',
+        priority: TaskPriority.medium(),
+        title: `【${stageLabel}】面接お礼メール・追加資料の送付`,
+      },
+    ];
+
+    for (const def of defaultTaskDefs) {
+      const taskType = TaskType.create(def.type).getValue();
+      const todoRes = PreparationTodo.create({
+        applicationId: this.id,
+        interviewSessionId: session.id,
+        taskType,
+        title: def.title,
+        description: `フェーズ「${stageLabel}」における面接事前準備・事後タスク`,
+        priority: def.priority,
+        dueDate: session.timeWindow.start,
+      });
+
+      if (todoRes.isSuccess()) {
+        const todo = todoRes.getValue();
+        this._todos.push(todo);
+        this.addDomainEvent(
+          new PreparationTodoCreatedEvent(
+            this.id.value,
+            todo.id.value,
+            todo.taskType.code,
+            todo.title
+          )
+        );
+      }
+    }
+  }
+
+  public rescheduleInterview(
+    sessionId: InterviewSessionId,
+    newTimeWindow: TimeWindow
+  ): Result<void> {
+    const session = this._sessions.find((s) => s.id.equals(sessionId));
+    if (!session) {
+      return Result.fail(`ID: ${sessionId.value} の面接セッションが見つかりません。`);
+    }
+
+    const prevJP = session.timeWindow.formatJP();
+    const res = session.reschedule(newTimeWindow);
+    if (res.isFailure()) return res;
+
+    // Update attend task title / due date
+    const attendTodo = this._todos.find(
+      (t) => t.interviewSessionId?.equals(sessionId) && t.taskType.code === 'ATTEND_INTERVIEW'
+    );
+    if (attendTodo) {
+      // Due date update
+    }
+
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new InterviewSessionRescheduledEvent(
+        this.id.value,
+        session.id.value,
+        prevJP,
+        newTimeWindow.formatJP()
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+
+  /**
+   * Assign a stocked question from TargetCompany to this interview session
+   * as a Value Object snapshot.
+   */
+  public assignStockedQuestion(
+    sessionId: InterviewSessionId,
+    stocked: StockedReverseQuestion,
+    customizedText?: string
+  ): Result<void> {
+    const session = this._sessions.find((s) => s.id.equals(sessionId));
+    if (!session) {
+      return Result.fail(`ID: ${sessionId.value} の面接セッションが見つかりません。`);
+    }
+
+    const assignedVO = AssignedReverseQuestion.fromStocked(stocked, customizedText);
+    const assignRes = session.assignQuestion(assignedVO);
+    if (assignRes.isFailure()) return assignRes;
+
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new ReverseQuestionAssignedEvent(
+        this.id.value,
+        session.id.value,
+        assignedVO.id,
+        assignedVO.customizedQuestionText
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+
+  public recordQuestionAnswer(
+    sessionId: InterviewSessionId,
+    questionId: string,
+    answer: string,
+    rating?: InsightRating
+  ): Result<void> {
+    const session = this._sessions.find((s) => s.id.equals(sessionId));
+    if (!session) {
+      return Result.fail(`ID: ${sessionId.value} の面接セッションが見つかりません。`);
+    }
+
+    const res = session.recordQuestionAnswer(questionId, answer, rating);
+    if (res.isFailure()) return res;
+
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new ReverseQuestionAnswerRecordedEvent(
+        this.id.value,
+        session.id.value,
+        questionId,
+        answer,
+        rating
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+
+  public recordInterviewReflection(
+    sessionId: InterviewSessionId,
+    reflection: InterviewReflection
+  ): Result<void> {
+    const session = this._sessions.find((s) => s.id.equals(sessionId));
+    if (!session) {
+      return Result.fail(`ID: ${sessionId.value} の面接セッションが見つかりません。`);
+    }
+
+    const res = session.recordReflection(reflection);
+    if (res.isFailure()) return res;
+
+    // Automatically complete reflection & interview attendance todos
+    const relatedTodos = this._todos.filter((t) => t.interviewSessionId?.equals(sessionId));
+    for (const todo of relatedTodos) {
+      if (
+        (todo.taskType.code === 'POST_INTERVIEW_REFLECTION' ||
+          todo.taskType.code === 'ATTEND_INTERVIEW') &&
+        !todo.status.isDone
+      ) {
+        todo.markAsDone();
+      }
+    }
+
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new InterviewReflectionRecordedEvent(
+        this.id.value,
+        session.id.value,
+        reflection.candidatePerformanceRating,
+        reflection.companyImpressionRating,
+        reflection.keyLearningsAndInsights
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+
+  public addCustomTodo(props: {
+    title: string;
+    description?: string;
+    priority?: TaskPriority;
+    dueDate?: Date;
+    sessionId?: InterviewSessionId;
+  }): Result<PreparationTodo> {
+    if (this._status.isTerminal) {
+      return Result.fail('終了済みの選考にタスクを追加することはできません。');
+    }
+
+    const taskType = TaskType.create('CUSTOM_TODO').getValue();
+    const todoResult = PreparationTodo.create({
+      applicationId: this.id,
+      interviewSessionId: props.sessionId,
+      taskType,
+      title: props.title,
+      description: props.description || '',
+      priority: props.priority || TaskPriority.medium(),
+      dueDate: props.dueDate,
+    });
+
+    if (todoResult.isFailure()) return Result.fail(todoResult.getError());
+
+    const todo = todoResult.getValue();
+    this._todos.push(todo);
+    this._updatedAt = new Date();
+
+    this.addDomainEvent(
+      new PreparationTodoCreatedEvent(
+        this.id.value,
+        todo.id.value,
+        todo.taskType.code,
+        todo.title
+      )
+    );
+
+    return Result.ok(todo);
+  }
+
+  public updateTodoStatus(todoId: TodoId, newStatus: TaskStatus): Result<void> {
+    const todo = this._todos.find((t) => t.id.equals(todoId));
+    if (!todo) {
+      return Result.fail(`ID: ${todoId.value} のタスクが見つかりません。`);
+    }
+
+    const prevLabel = todo.status.label;
+    const res = todo.updateStatus(newStatus);
+    if (res.isFailure()) return res;
+
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new PreparationTodoStatusChangedEvent(
+        this.id.value,
+        todo.id.value,
+        todo.title,
+        prevLabel,
+        newStatus.label
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+
+  /**
+   * Advance pipeline to the next stage, checking domain invariants.
+   */
+  public advanceStage(): Result<{ nextStage: SelectionStage }> {
+    if (this._status.isTerminal) {
+      return Result.fail(`選考終了（${this._status.label}）のため次のステージに進むことはできません。`);
+    }
+
+    const nextStage = this._currentStage.getNextStage();
+    if (!nextStage) {
+      return Result.fail(`現在のステージ「${this._currentStage.label}」は最終段階です。`);
+    }
+
+    // Check blocking tasks for the current stage
+    const currentSession = this._sessions.find((s) => s.stage.code === this._currentStage.code);
+    if (currentSession) {
+      if (!currentSession.reflection) {
+        return Result.fail(
+          `ステージ「${this._currentStage.label}」の面接振り返り（Reflection）が未入力です。次のステージに進む前に振り返りを記録してください。`
+        );
+      }
+    }
+
+    const prevLabel = this._currentStage.label;
+    this._currentStage = nextStage;
+    this._updatedAt = new Date();
+
+    this.addDomainEvent(
+      new SelectionStageAdvancedEvent(this.id.value, prevLabel, nextStage.label)
+    );
+
+    return Result.ok({ nextStage });
+  }
+
+  public acceptOffer(): Result<void> {
+    if (this._status.isTerminal) {
+      return Result.fail('既に完了している選考です。');
+    }
+
+    this._status = ApplicationStatus.offerAccepted();
+    this._updatedAt = new Date();
+
+    this.addDomainEvent(
+      new JobApplicationOfferAcceptedEvent(this.id.value, this._positionDetails.title)
+    );
+
+    return Result.ok(undefined);
+  }
+
+  public reject(reason?: string): Result<void> {
+    if (this._status.isTerminal) {
+      return Result.fail('既に完了している選考です。');
+    }
+
+    const currentStageLabel = this._currentStage.label;
+    this._status = ApplicationStatus.rejected();
+    this._updatedAt = new Date();
+
+    this.addDomainEvent(
+      new JobApplicationRejectedEvent(
+        this.id.value,
+        currentStageLabel,
+        reason || '企業側よりお見送りの連絡'
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+
+  public withdraw(reason?: string): Result<void> {
+    if (this._status.isTerminal) {
+      return Result.fail('既に完了している選考です。');
+    }
+
+    const currentStageLabel = this._currentStage.label;
+    this._status = ApplicationStatus.withdrawn();
+    this._updatedAt = new Date();
+
+    this.addDomainEvent(
+      new JobApplicationWithdrawnEvent(
+        this.id.value,
+        currentStageLabel,
+        reason || '候補者側からの選考辞退'
+      )
+    );
+
+    return Result.ok(undefined);
+  }
+}

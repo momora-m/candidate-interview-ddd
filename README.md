@@ -28,6 +28,9 @@
     └── PostgresTargetCompanyRepository / PostgresJobApplicationRepository
           └── 集約保存時に子行をトランザクション内で全削除・再挿入 (ADR-0006)
 
+[ HTTP API ]
+    └── Hono + Zod（ユースケースをそのまま呼ぶ。ORM は使わない）
+
 [ Presentation Layer ]
     └── React 19 + Vite 6 + Tailwind CSS SPA
 ```
@@ -73,8 +76,26 @@
 - [ADR-0005: 移動・準備バッファ（Travel Buffer）を考慮した日程重複・過密判定アルゴリズム](docs/adr/0005-travel-and-prep-buffers-in-schedule-conflict-detection.md)
 - [ADR-0006: RDB（PostgreSQL）永続化と子エンティティのトランザクション内全削除・一括再挿入方針](docs/adr/0006-rdb-persistence-with-transactional-full-replace-for-child-entities.md)
 - [ADR-0007: 外部非依存の純粋 TypeScript ドメイン層、Result 型エラーハンドリング、およびドメインイベントバス](docs/adr/0007-pure-typescript-domain-with-result-type-and-event-bus.md)
+- [ADR-0008: Schema-First (OpenAPI 3.1) アプローチと openapi-typescript による型自動生成](docs/adr/0008-schema-first-openapi-and-code-generation.md)
 
 詳細は [docs/adr/README.md](docs/adr/README.md) を参照してください。
+
+---
+
+## 6. OpenAPI 仕様書と型自動生成 (Schema-First)
+
+API のインターフェースは `docs/openapi/openapi.yaml` を単一の信頼できる情報源（Single Source of Truth）として定義しています。
+
+### OpenAPI からの TypeScript 型自動生成
+```bash
+npm run generate:types
+```
+`src/api/generated/schema.d.ts` および `src/api/generated/types.ts` に、リクエストボディ・レスポンス・ドメインDTOの完全な型定義が自動生成されます。
+
+### Swagger UI による対話ドキュメント閲覧
+API サーバーを起動（`npm run api`）後、以下のURLにアクセスすると Swagger UI を利用できます：
+- **Swagger UI**: `http://localhost:4317/docs`
+- **OpenAPI 3.1 仕様書 (YAML)**: `http://localhost:4317/openapi.yaml`
 
 ---
 
@@ -84,6 +105,16 @@
 ```bash
 npm install
 ```
+
+### 依存関係の脆弱性スキャン
+`next` は Vite へ移行した後も残っていたため外しました。スキャンはロックファイルに対する `npm audit` と、レジストリ署名の `npm audit signatures` です。
+
+```bash
+npm install -g npm@11.10.0
+npm run security:check
+```
+
+`.npmrc` の `min-release-age=7` は、新規に解決するパッケージを公開から 7 日経つまで入れない設定です。npm 11.10.0 以降で有効になります。既存の `package-lock.json` を `npm ci` で入れるときは、ロック済みの版をそのまま使います。Dependabot も同じ 7 日の cooldown で更新します。毎週のスキャンは `.github/workflows/npm-audit.yml` です。
 
 ### 単体テストの実行 (tsx test runner)
 ```bash
@@ -100,6 +131,28 @@ DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview 
 ```
 
 `npm run db:migrate` は `db/migrations/001_initial.sql` を適用します。画面のプロトタイプは引き続きインメモリリポジトリを使います。
+
+### API サーバー (Hono)
+```bash
+npm run api
+```
+`DATABASE_URL` が無いときはインメモリリポジトリで起動し、画面と同じ初期データを投入します。接続文字列があるときは PostgreSQL リポジトリを使います。
+
+```bash
+DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run api
+```
+
+待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。
+
+型だけ共有するクライアントの例:
+
+```ts
+import { hc } from 'hono/client';
+import type { AppType } from './src/api/app';
+
+const client = hc<AppType>('http://127.0.0.1:4317');
+const companies = await client.api.companies.$get();
+```
 
 ### 開発サーバーの起動 (Vite)
 ```bash

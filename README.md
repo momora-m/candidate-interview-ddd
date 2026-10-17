@@ -76,8 +76,26 @@
 - [ADR-0005: 移動・準備バッファ（Travel Buffer）を考慮した日程重複・過密判定アルゴリズム](docs/adr/0005-travel-and-prep-buffers-in-schedule-conflict-detection.md)
 - [ADR-0006: RDB（PostgreSQL）永続化と子エンティティのトランザクション内全削除・一括再挿入方針](docs/adr/0006-rdb-persistence-with-transactional-full-replace-for-child-entities.md)
 - [ADR-0007: 外部非依存の純粋 TypeScript ドメイン層、Result 型エラーハンドリング、およびドメインイベントバス](docs/adr/0007-pure-typescript-domain-with-result-type-and-event-bus.md)
+- [ADR-0008: Schema-First (OpenAPI 3.1) アプローチと openapi-typescript による型自動生成](docs/adr/0008-schema-first-openapi-and-code-generation.md)
 
 詳細は [docs/adr/README.md](docs/adr/README.md) を参照してください。
+
+---
+
+## 6. OpenAPI 仕様書と型自動生成 (Schema-First)
+
+API のインターフェースは `docs/openapi/openapi.yaml` を単一の信頼できる情報源（Single Source of Truth）として定義しています。
+
+### OpenAPI からの TypeScript 型自動生成
+```bash
+npm run generate:types
+```
+`src/api/generated/schema.d.ts` および `src/api/generated/types.ts` に、リクエストボディ・レスポンス・ドメインDTOの完全な型定義が自動生成されます。
+
+### Swagger UI による対話ドキュメント閲覧
+API サーバーを起動（`npm run api`）後、以下のURLにアクセスすると Swagger UI を利用できます：
+- **Swagger UI**: `http://localhost:4317/docs`
+- **OpenAPI 3.1 仕様書 (YAML)**: `http://localhost:4317/openapi.yaml`
 
 ---
 

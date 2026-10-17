@@ -1,5 +1,9 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { swaggerUI } from '@hono/swagger-ui';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { CandidateUseCases } from '@/application/createCandidateUseCases';
 import type { CandidateQueryService } from '@/application/queries/CandidateQueryService';
 import { domainError, jsonBody } from './http';
@@ -17,6 +21,11 @@ import {
   updateTodoSchema,
 } from './schemas';
 
+const openapiYamlPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../docs/openapi/openapi.yaml'
+);
+
 export interface ApiRuntime {
   persistence: 'memory' | 'postgres';
   queries: CandidateQueryService;
@@ -25,6 +34,14 @@ export interface ApiRuntime {
 
 export function createApp(runtime: ApiRuntime) {
   const { queries, useCases } = runtime;
+  let openapiYamlCache: string | null = null;
+
+  const getOpenapiYaml = () => {
+    if (!openapiYamlCache) {
+      openapiYamlCache = readFileSync(openapiYamlPath, 'utf8');
+    }
+    return openapiYamlCache;
+  };
 
   return new Hono()
     .use('*', cors())
@@ -32,10 +49,24 @@ export function createApp(runtime: ApiRuntime) {
       c.json({
         name: 'candidate-interview-api',
         persistence: runtime.persistence,
+        documentation: '/docs',
+        openapiSpec: '/openapi.yaml',
         health: '/health',
         companies: '/api/companies',
         applications: '/api/applications',
         events: '/api/events',
+      })
+    )
+    .get('/openapi.yaml', (c) => {
+      return c.text(getOpenapiYaml(), 200, {
+        'content-type': 'application/yaml; charset=utf-8',
+      });
+    })
+    .get(
+      '/docs',
+      swaggerUI({
+        url: '/openapi.yaml',
+        title: 'Candidate DDD API Docs (Swagger UI)',
       })
     )
     .get('/health', (c) => c.json({ status: 'ok', persistence: runtime.persistence }))

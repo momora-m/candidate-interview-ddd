@@ -121,5 +121,13 @@ describe('Hono candidate API', () => {
 
     const missing = await app.request('/api/applications/missing-application');
     assert.equal(missing.status, 404);
+
+    const openapi = await app.request('/openapi.yaml');
+    assert.equal(openapi.status, 200);
+    assert.match(await openapi.text(), /openapi: 3\.1\.0/);
+
+    const docs = await app.request('/docs');
+    assert.equal(docs.status, 200);
+    assert.match(await docs.text(), /SwaggerUI/);
   });
 });

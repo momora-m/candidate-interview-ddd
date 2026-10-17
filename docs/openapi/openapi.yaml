@@ -1,0 +1,1421 @@
+openapi: 3.1.0
+info:
+  title: Candidate DDD Interview Platform API
+  version: 1.0.0
+  description: >
+    候補者（求職者自身）が主体となって複数企業の選考プロセス、面接日程、逆質問スナップショット、
+    事前準備TODO、および面接後の振り返りインサイトを管理するための
+    ドメイン駆動設計（DDD）API仕様書です。
+servers:
+  - url: http://127.0.0.1:4317
+    description: ローカル開発サーバー (Hono on Node.js)
+  - url: https://api.candidate-ddd.internal
+    description: Google Cloud Run 本番環境
+
+tags:
+  - name: Companies
+    description: 志望企業集約（TargetCompany）および全社逆質問プール管理
+  - name: Applications
+    description: 選考応募集約（JobApplication）および選考パイプライン管理
+  - name: Interviews
+    description: 面接セッション（InterviewSession）、逆質問割当、および面接振り返り
+  - name: Todos
+    description: 事前準備・事後フォローアップTODOタスク管理
+  - name: Events
+    description: ドメインイベントストリーム
+  - name: System
+    description: システムヘルスチェック
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: ヘルスチェック
+      description: API サーバーおよび永続化接続の稼働状況を返します。
+      operationId: getHealth
+      responses:
+        '200':
+          description: サーバー正常稼働
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /api/companies:
+    get:
+      tags: [Companies]
+      summary: 志望企業一覧の取得
+      description: 登録済みのすべての志望企業、企業プロフィール、およびストック逆質問一覧を取得します。
+      operationId: listCompanies
+      responses:
+        '200':
+          description: 志望企業一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TargetCompany'
+
+    post:
+      tags: [Companies]
+      summary: 志望企業の新規登録
+      description: 志望企業集約（TargetCompany）を事業モデル・技術スタックとともに新規作成します。
+      operationId: createCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompanyRequest'
+      responses:
+        '201':
+          description: 志望企業作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetCompany'
+        '400':
+          description: 入力バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /api/companies/{companyId}:
+    get:
+      tags: [Companies]
+      summary: 志望企業詳細の取得
+      operationId: getCompany
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          description: 志望企業ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 志望企業詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetCompany'
+        '404':
+          description: 企業が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/companies/{companyId}/questions:
+    post:
+      tags: [Companies]
+      summary: 企業逆質問プールへの質問追加
+      description: 志望企業に紐づく逆質問（StockedReverseQuestion）をプールに追加します。
+      operationId: addStockedQuestion
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          description: 志望企業ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddStockedQuestionRequest'
+      responses:
+        '201':
+          description: 逆質問追加成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [questionId, company]
+                properties:
+                  questionId:
+                    type: string
+                    description: 発行された逆質問ID
+                  company:
+                    $ref: '#/components/schemas/TargetCompany'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 企業が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications:
+    get:
+      tags: [Applications]
+      summary: 選考応募一覧の取得
+      description: 全選考応募（JobApplication）、面接セッション、TODOタスクの一覧を取得します。
+      operationId: listApplications
+      responses:
+        '200':
+          description: 選考応募一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobApplication'
+
+    post:
+      tags: [Applications]
+      summary: 選考応募の新規作成
+      description: 特定の志望企業に対する選考応募集約（JobApplication）を作成します。
+      operationId: createApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+      responses:
+        '201':
+          description: 選考応募作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 指定された企業が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}:
+    get:
+      tags: [Applications]
+      summary: 選考応募詳細の取得
+      operationId: getApplication
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          description: 応募ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 選考応募詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '404':
+          description: 応募が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/interviews:
+    post:
+      tags: [Interviews]
+      summary: 面接日程の予約・登録
+      description: >
+        面接セッションを新規登録します。登録時に他社面接および移動・準備バッファ（Travel Buffer）
+        との衝突判定ドメインサービスが実行され、重複時は 409 を返します。
+        登録成功時はフェーズ別の事前準備・振り返りTODOが自動生成されます。
+      operationId: scheduleInterview
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          description: 応募ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleInterviewRequest'
+      responses:
+        '201':
+          description: 面接予約成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId, application]
+                properties:
+                  sessionId:
+                    type: string
+                  application:
+                    $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 入力値不正（開始 > 終了など）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 応募が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 他社面接または移動・準備バッファとの重複（過密スケジュール衝突）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/interviews/{sessionId}/reschedule:
+    post:
+      tags: [Interviews]
+      summary: 面接日時のリスケジュール（変更）
+      description: 確定済みの面接セッションの日時を変更し、過密バッファを再検証します。
+      operationId: rescheduleInterview
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RescheduleInterviewRequest'
+      responses:
+        '200':
+          description: リスケジュール成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 入力値不正
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 面接セッションが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 日程変更先での重複衝突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/interviews/{sessionId}/questions:
+    post:
+      tags: [Interviews]
+      summary: 面接への逆質問割当（スナップショットコピー）
+      description: >
+        企業プールにストックされた逆質問を、対象面接官に合わせてカスタマイズし、
+        不変スナップショットコピー（AssignedReverseQuestion）として面接に割り当てます。
+      operationId: assignReverseQuestion
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignQuestionRequest'
+      responses:
+        '200':
+          description: 逆質問割当成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '404':
+          description: 応募・面接またはストック質問が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 既に割り当て済み
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/interviews/{sessionId}/questions/{questionId}/answer:
+    post:
+      tags: [Interviews]
+      summary: 逆質問の回答記録
+      description: 面接本番で面接官から得られた回答内容と候補者の納得度スコア（1〜5）を記録します。
+      operationId: recordQuestionAnswer
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordAnswerRequest'
+      responses:
+        '200':
+          description: 回答記録成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '404':
+          description: 質問が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/interviews/{sessionId}/reflection:
+    post:
+      tags: [Interviews]
+      summary: 面接振り返り（Reflection）の記録
+      description: >
+        面接直後に自己評価、企業印象、得られた知見、次回アクションを記録します。
+        記録完了に伴い、面接実施タスクおよび振り返りタスクが自動で完了になります。
+      operationId: recordInterviewReflection
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordReflectionRequest'
+      responses:
+        '200':
+          description: 振り返り記録成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 入力文字数不足などのバリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 面接が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/todos:
+    post:
+      tags: [Todos]
+      summary: カスタム事前準備TODOの追加
+      operationId: addCustomTodo
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTodoRequest'
+      responses:
+        '201':
+          description: TODO追加成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [todoId, application]
+                properties:
+                  todoId:
+                    type: string
+                  application:
+                    $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /api/applications/{applicationId}/todos/{todoId}:
+    patch:
+      tags: [Todos]
+      summary: TODOステータスの更新・トグル
+      operationId: updateTodoStatus
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: todoId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTodoStatusRequest'
+      responses:
+        '200':
+          description: ステータス更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '404':
+          description: TODOが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/advance:
+    post:
+      tags: [Applications]
+      summary: 次の選考ステージへの昇格
+      description: >
+        現在の選考ステージから次へパイプラインを進めます。
+        直前の面接セッションの振り返り（Reflection）が未入力の場合は不変条件違反として 400 でブロックされます。
+      operationId: advanceSelectionStage
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ステージ昇格成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvanceStageResponse'
+        '400':
+          description: 振り返り未完了など進行不能ルール違反
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 応募が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/close:
+    post:
+      tags: [Applications]
+      summary: 選考終了（内定承諾 / お見送り / 選考辞退）
+      operationId: closeApplication
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseApplicationRequest'
+      responses:
+        '200':
+          description: 選考ステータス更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 既に終了済みの選考
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 応募が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/events:
+    get:
+      tags: [Events]
+      summary: ドメインイベント一覧（イベントストリーム）の取得
+      operationId: listEvents
+      responses:
+        '200':
+          description: イベント履歴
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DomainEvent'
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status, persistence]
+      properties:
+        status:
+          type: string
+          example: ok
+        persistence:
+          type: string
+          enum: [memory, postgres]
+
+    TargetAudience:
+      type: string
+      enum:
+        - B2B_ENTERPRISE
+        - B2B_SMB
+        - B2C
+        - C2C
+        - INTERNAL_PLATFORM
+
+    CloudPlatform:
+      type: string
+      enum:
+        - GCP
+        - AWS
+        - AZURE
+        - HYBRID
+        - OTHER
+
+    QuestionCategory:
+      type: string
+      enum:
+        - CULTURE
+        - TECH_STACK
+        - ROADMAP
+        - EVALUATION
+        - ORGANIZATION
+
+    TargetInterviewerRole:
+      type: string
+      enum:
+        - LEAD_ENGINEER
+        - ENGINEERING_MANAGER
+        - EXECUTIVE_CTO
+        - TALENT_ACQUISITION
+
+    StageCode:
+      type: string
+      enum:
+        - DOCUMENT_SCREENING
+        - CASUAL_INTERVIEW
+        - FIRST_TECHNICAL
+        - SECOND_MANAGEMENT
+        - FINAL_EXECUTIVE
+        - OFFER_NEGOTIATION
+        - ACCEPTED
+        - REJECTED
+        - WITHDRAWN
+
+    ApplicationStatusCode:
+      type: string
+      enum:
+        - IN_PROGRESS
+        - OFFER_ACCEPTED
+        - REJECTED
+        - WITHDRAWN
+
+    FormatType:
+      type: string
+      enum:
+        - ONLINE
+        - IN_PERSON
+
+    TaskTypeCode:
+      type: string
+      enum:
+        - PRE_INTERVIEW_RESEARCH
+        - REVERSE_QUESTION_PREP
+        - RESUME_PORTFOLIO_REVIEW
+        - ATTEND_INTERVIEW
+        - POST_INTERVIEW_REFLECTION
+        - THANK_YOU_NOTE
+        - CUSTOM_TODO
+
+    TaskStatusCode:
+      type: string
+      enum:
+        - TODO
+        - IN_PROGRESS
+        - DONE
+        - SKIPPED
+
+    PriorityLevel:
+      type: string
+      enum:
+        - URGENT
+        - HIGH
+        - MEDIUM
+        - LOW
+
+    Rating1To5:
+      type: integer
+      minimum: 1
+      maximum: 5
+      example: 4
+
+    BusinessModel:
+      type: object
+      required: [productSummary, targetAudience, revenueStream, keyCompetitors]
+      properties:
+        productSummary:
+          type: string
+          example: 急成長中のエンジニア組織向け生産性向上SaaS
+        targetAudience:
+          $ref: '#/components/schemas/TargetAudience'
+        revenueStream:
+          type: string
+          example: 年額エンタープライズ契約 + アカウント課金
+        keyCompetitors:
+          type: array
+          items:
+            type: string
+          example: ['Linear', 'Jira']
+
+    TechStackProfile:
+      type: object
+      required: [primaryLanguages, cloudPlatform, architectureHighlights, techBlogUrls]
+      properties:
+        primaryLanguages:
+          type: array
+          items:
+            type: string
+          example: ['Go', 'TypeScript']
+        cloudPlatform:
+          $ref: '#/components/schemas/CloudPlatform'
+        architectureHighlights:
+          type: array
+          items:
+            type: string
+          example: ['DDD', 'Clean Architecture', 'Event-Driven']
+        techBlogUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    StockedReverseQuestion:
+      type: object
+      required:
+        - id
+        - category
+        - categoryLabel
+        - targetRole
+        - targetRoleLabel
+        - questionText
+        - hypothesisOrIntent
+      properties:
+        id:
+          type: string
+          example: q_stocked_1
+        category:
+          $ref: '#/components/schemas/QuestionCategory'
+        categoryLabel:
+          type: string
+          example: 組織体制・意思決定プロセス
+        targetRole:
+          $ref: '#/components/schemas/TargetInterviewerRole'
+        targetRoleLabel:
+          type: string
+          example: エンジニアリングマネージャー (EM)
+        questionText:
+          type: string
+          example: オンコール体制とトイル削減への投資割合を教えてください。
+        hypothesisOrIntent:
+          type: string
+          example: 運用負荷が特定シニア層に属人化していないか検証する。
+
+    TargetCompany:
+      type: object
+      required:
+        - id
+        - name
+        - businessModel
+        - techStack
+        - stockedQuestions
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: comp_101
+        name:
+          type: string
+          example: クラウドネクスト株式会社
+        businessModel:
+          $ref: '#/components/schemas/BusinessModel'
+        techStack:
+          $ref: '#/components/schemas/TechStackProfile'
+        overallAttractivenessSummary:
+          type: string
+          nullable: true
+          example: 技術負債への向き合い方とシニア層の裁量が大きい
+        corporateMission:
+          type: string
+          nullable: true
+          example: エンジニアの非本質的作業をゼロにする
+        stockedQuestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockedReverseQuestion'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AssignedReverseQuestion:
+      type: object
+      required:
+        - id
+        - category
+        - customizedQuestionText
+        - isAsked
+      properties:
+        id:
+          type: string
+          example: assigned_q_1
+        sourceQuestionId:
+          type: string
+          nullable: true
+          example: q_stocked_1
+        category:
+          $ref: '#/components/schemas/QuestionCategory'
+        customizedQuestionText:
+          type: string
+          example: 御社のEMから見て、オンコール体制での運用負荷はどう分担されていますか？
+        isAsked:
+          type: boolean
+          example: true
+        obtainedAnswer:
+          type: string
+          nullable: true
+          example: 週1持ち回りで、インシデント後は必ずポストモーテムで改善タスク化している
+        insightRating:
+          $ref: '#/components/schemas/Rating1To5'
+
+    InterviewReflection:
+      type: object
+      required:
+        - candidatePerformanceRating
+        - companyImpressionRating
+        - keyLearningsAndInsights
+        - nextActionNotes
+        - recordedAt
+      properties:
+        candidatePerformanceRating:
+          $ref: '#/components/schemas/Rating1To5'
+        companyImpressionRating:
+          $ref: '#/components/schemas/Rating1To5'
+        keyLearningsAndInsights:
+          type: string
+          example: EMの技術理解が深く、アーキテクチャ刷新の意思決定が速い
+        concernsOrRedFlags:
+          type: string
+          nullable: true
+          example: 直近の採用目標数が多くオンボーディング負荷が高そう
+        nextActionNotes:
+          type: string
+          example: 二次面接で現場リードにオンボーディング実態を質問する
+        recordedAt:
+          type: string
+          format: date-time
+
+    InterviewSession:
+      type: object
+      required:
+        - id
+        - stageCode
+        - stageLabel
+        - startTime
+        - endTime
+        - timeWindowJP
+        - durationMinutes
+        - formatType
+        - formatSummary
+        - travelBufferMinutes
+        - interviewerNames
+        - assignedQuestions
+        - isCompleted
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: intv_101
+        stageCode:
+          $ref: '#/components/schemas/StageCode'
+        stageLabel:
+          type: string
+          example: 一次技術面接 / スキル評価
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        timeWindowJP:
+          type: string
+          example: 2026/11/02(月) 10:00〜11:00 (60分)
+        durationMinutes:
+          type: integer
+          example: 60
+        formatType:
+          $ref: '#/components/schemas/FormatType'
+        formatSummary:
+          type: string
+          example: 'オンライン (ZOOM): https://zoom.us/j/123456789'
+        meetingUrl:
+          type: string
+          nullable: true
+        locationName:
+          type: string
+          nullable: true
+        roomName:
+          type: string
+          nullable: true
+        travelBufferMinutes:
+          type: integer
+          example: 10
+        interviewerNames:
+          type: array
+          items:
+            type: string
+          example: ['山田（Tech Lead）']
+        assignedQuestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssignedReverseQuestion'
+        reflection:
+          $ref: '#/components/schemas/InterviewReflection'
+        isCompleted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PreparationTodo:
+      type: object
+      required:
+        - id
+        - applicationId
+        - taskTypeCode
+        - title
+        - description
+        - statusCode
+        - statusLabel
+        - priorityLevel
+        - priorityLabel
+        - priorityColor
+        - isBlocking
+        - createdAt
+      properties:
+        id:
+          type: string
+          example: todo_101
+        applicationId:
+          type: string
+          example: app_101
+        interviewSessionId:
+          type: string
+          nullable: true
+          example: intv_101
+        taskTypeCode:
+          $ref: '#/components/schemas/TaskTypeCode'
+        title:
+          type: string
+          example: 【一次技術面接】企業リサーチ・最新ニュース/技術ブログ確認
+        description:
+          type: string
+        statusCode:
+          $ref: '#/components/schemas/TaskStatusCode'
+        statusLabel:
+          type: string
+          example: 完了
+        priorityLevel:
+          $ref: '#/components/schemas/PriorityLevel'
+        priorityLabel:
+          type: string
+          example: 最優先 (Urgent)
+        priorityColor:
+          type: string
+          example: '#ef4444'
+        isBlocking:
+          type: boolean
+          example: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    JobApplication:
+      type: object
+      required:
+        - id
+        - companyId
+        - companyName
+        - positionTitle
+        - salaryFormatted
+        - desirabilityRating
+        - whyThisRole
+        - valueProposition
+        - careerGrowthAlignment
+        - currentStageCode
+        - currentStageLabel
+        - statusCode
+        - statusLabel
+        - isTerminal
+        - sessions
+        - todos
+        - version
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: app_101
+        companyId:
+          type: string
+          example: comp_101
+        companyName:
+          type: string
+          example: クラウドネクスト株式会社
+        positionTitle:
+          type: string
+          example: Staff Backend Engineer
+        jobDescriptionUrl:
+          type: string
+          nullable: true
+        salaryMin:
+          type: integer
+          nullable: true
+          example: 9000000
+        salaryMax:
+          type: integer
+          nullable: true
+          example: 13000000
+        salaryFormatted:
+          type: string
+          example: 900万〜1300万円
+        targetSeniority:
+          type: string
+          nullable: true
+          example: Staff / Tech Lead
+        desirabilityRating:
+          $ref: '#/components/schemas/Rating1To5'
+        whyThisRole:
+          type: string
+        valueProposition:
+          type: string
+        careerGrowthAlignment:
+          type: string
+        currentStageCode:
+          $ref: '#/components/schemas/StageCode'
+        currentStageLabel:
+          type: string
+          example: 一次技術面接 / スキル評価
+        statusCode:
+          $ref: '#/components/schemas/ApplicationStatusCode'
+        statusLabel:
+          type: string
+          example: 選考中
+        isTerminal:
+          type: boolean
+          example: false
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InterviewSession'
+        todos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreparationTodo'
+        version:
+          type: integer
+          example: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DomainEvent:
+      type: object
+      required:
+        - eventId
+        - aggregateId
+        - eventType
+        - occurredOn
+        - payload
+      properties:
+        eventId:
+          type: string
+        aggregateId:
+          type: string
+        eventType:
+          type: string
+        occurredOn:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+
+    CreateCompanyRequest:
+      type: object
+      required:
+        - name
+        - productSummary
+        - targetAudience
+        - revenueStream
+        - primaryLanguages
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: 株式会社エクスプローラー
+        productSummary:
+          type: string
+          minLength: 1
+          example: リアルタイムデータ基盤開発
+        targetAudience:
+          $ref: '#/components/schemas/TargetAudience'
+        revenueStream:
+          type: string
+          minLength: 1
+          example: B2B 月額課金
+        keyCompetitors:
+          type: array
+          items:
+            type: string
+          default: []
+        primaryLanguages:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          example: ['TypeScript', 'Go']
+        cloudPlatform:
+          $ref: '#/components/schemas/CloudPlatform'
+          default: GCP
+        architectureHighlights:
+          type: array
+          items:
+            type: string
+          default: []
+        techBlogUrls:
+          type: array
+          items:
+            type: string
+          default: []
+        overallAttractivenessSummary:
+          type: string
+        corporateMission:
+          type: string
+
+    AddStockedQuestionRequest:
+      type: object
+      required:
+        - category
+        - targetRole
+        - questionText
+        - hypothesisOrIntent
+      properties:
+        category:
+          $ref: '#/components/schemas/QuestionCategory'
+        targetRole:
+          $ref: '#/components/schemas/TargetInterviewerRole'
+        questionText:
+          type: string
+          minLength: 1
+        hypothesisOrIntent:
+          type: string
+          minLength: 1
+
+    CreateApplicationRequest:
+      type: object
+      required:
+        - companyId
+        - positionTitle
+      properties:
+        companyId:
+          type: string
+        positionTitle:
+          type: string
+          minLength: 1
+        jobDescriptionUrl:
+          type: string
+        salaryMin:
+          type: integer
+          minimum: 0
+        salaryMax:
+          type: integer
+          minimum: 0
+        targetSeniority:
+          type: string
+        desirabilityRating:
+          $ref: '#/components/schemas/Rating1To5'
+        whyThisRole:
+          type: string
+        valueProposition:
+          type: string
+        careerGrowthAlignment:
+          type: string
+        initialStageCode:
+          $ref: '#/components/schemas/StageCode'
+
+    ScheduleInterviewRequest:
+      type: object
+      required:
+        - startTime
+        - endTime
+        - formatType
+      properties:
+        stageCode:
+          $ref: '#/components/schemas/StageCode'
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        formatType:
+          $ref: '#/components/schemas/FormatType'
+        meetingUrl:
+          type: string
+        meetingPasscode:
+          type: string
+        locationName:
+          type: string
+        roomName:
+          type: string
+        receptionInstructions:
+          type: string
+        estimatedTravelMinutes:
+          type: integer
+          minimum: 0
+        interviewerNames:
+          type: array
+          items:
+            type: string
+
+    RescheduleInterviewRequest:
+      type: object
+      required:
+        - newStartTime
+        - newEndTime
+      properties:
+        newStartTime:
+          type: string
+          format: date-time
+        newEndTime:
+          type: string
+          format: date-time
+
+    AssignQuestionRequest:
+      type: object
+      required:
+        - stockedQuestionId
+      properties:
+        stockedQuestionId:
+          type: string
+        customizedText:
+          type: string
+
+    RecordAnswerRequest:
+      type: object
+      required:
+        - answer
+      properties:
+        answer:
+          type: string
+          minLength: 1
+        insightRating:
+          $ref: '#/components/schemas/Rating1To5'
+
+    RecordReflectionRequest:
+      type: object
+      required:
+        - candidatePerformanceRating
+        - companyImpressionRating
+        - keyLearningsAndInsights
+        - nextActionNotes
+      properties:
+        candidatePerformanceRating:
+          $ref: '#/components/schemas/Rating1To5'
+        companyImpressionRating:
+          $ref: '#/components/schemas/Rating1To5'
+        keyLearningsAndInsights:
+          type: string
+          minLength: 5
+        concernsOrRedFlags:
+          type: string
+        nextActionNotes:
+          type: string
+          minLength: 3
+
+    AddTodoRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        priorityLevel:
+          $ref: '#/components/schemas/PriorityLevel'
+        dueDate:
+          type: string
+          format: date-time
+        sessionId:
+          type: string
+
+    UpdateTodoStatusRequest:
+      type: object
+      properties:
+        newStatus:
+          $ref: '#/components/schemas/TaskStatusCode'
+
+    CloseApplicationRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [REJECT, WITHDRAW, ACCEPT_OFFER]
+        reason:
+          type: string
+
+    AdvanceStageResponse:
+      type: object
+      required:
+        - nextStageName
+        - application
+      properties:
+        nextStageName:
+          type: string
+        application:
+          $ref: '#/components/schemas/JobApplication'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: 企業が見つかりません。
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - error
+        - issues
+      properties:
+        error:
+          type: string
+          example: リクエストの形式が正しくありません。
+        issues:
+          type: array
+          items:
+            type: object
+            required:
+              - path
+              - message
+            properties:
+              path:
+                type: string
+                example: name
+              message:
+                type: string
+                example: 必須項目です

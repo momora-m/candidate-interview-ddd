@@ -23,6 +23,11 @@
     ├── Event Bus Port & In-Memory Dispatcher (IEventBus / InMemoryEventBus)
     └── DTOs & Mappers
 
+[ Infrastructure / Persistence ]
+    ├── PostgreSQL schema (db/migrations/001_initial.sql)
+    └── PostgresTargetCompanyRepository / PostgresJobApplicationRepository
+          └── 集約保存時に子行をトランザクション内で全削除・再挿入 (ADR-0006)
+
 [ Presentation Layer ]
     └── React 19 + Vite 6 + Tailwind CSS SPA
 ```
@@ -73,7 +78,7 @@
 
 ---
 
-## 4. ローカル起動とテスト実行方法
+## 6. ローカル起動とテスト実行方法
 
 ### 依存関係のインストール
 ```bash
@@ -84,6 +89,17 @@ npm install
 ```bash
 npm test
 ```
+ドメイン・ユースケースに加え、PostgreSQL リポジトリの統合テストも実行します。テスト用データベースはプロセス内の PGlite なので、Docker や接続文字列は不要です。
+
+### PostgreSQL（任意）
+ローカルの PostgreSQL 16 を使う場合:
+
+```bash
+docker compose up -d
+DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run db:migrate
+```
+
+`npm run db:migrate` は `db/migrations/001_initial.sql` を適用します。画面のプロトタイプは引き続きインメモリリポジトリを使います。
 
 ### 開発サーバーの起動 (Vite)
 ```bash

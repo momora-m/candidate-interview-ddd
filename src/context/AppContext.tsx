@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { container } from '@/infrastructure/container';
+import confetti from 'canvas-confetti';
+import { apiRequest } from '@/api/client';
 import {
   TargetCompanyDTO,
   JobApplicationDTO,
@@ -15,15 +16,14 @@ import { AddStockedReverseQuestionCommand } from '@/application/use-cases/AddSto
 import { CreateTargetCompanyCommand } from '@/application/use-cases/CreateTargetCompanyUseCase';
 import { CreateJobApplicationCommand } from '@/application/use-cases/CreateJobApplicationUseCase';
 import { AddCustomTodoCommand } from '@/application/use-cases/AddCustomTodoUseCase';
-import { IDomainEvent } from '@/domain/shared/DomainEvent';
-import confetti from 'canvas-confetti';
 
 interface AppContextType {
   companies: TargetCompanyDTO[];
   applications: JobApplicationDTO[];
   events: DomainEventDTO[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  loadError: string | null;
+  refresh: () => Promise<DomainEventDTO[]>;
   scheduleInterview: (cmd: ScheduleInterviewCommand) => Promise<{ success: boolean; error?: string }>;
   proposeSchedule: (cmd: ProposeScheduleCommand) => Promise<{ success: boolean; error?: string }>;
   confirmProposedSchedule: (
@@ -55,60 +55,85 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+function failure(err: unknown): { success: false; error: string } {
+  return { success: false, error: err instanceof Error ? err.message : String(err) };
+}
+
+function celebrate(previous: DomainEventDTO[], next: DomainEventDTO[]) {
+  const seen = new Set(previous.map((event) => event.eventId));
+  const notable = next.some(
+    (event) =>
+      !seen.has(event.eventId) &&
+      (event.eventType === 'SELECTION_STAGE_ADVANCED' ||
+        event.eventType === 'JOB_APPLICATION_OFFER_ACCEPTED')
+  );
+  if (!notable) return;
+  confetti({
+    particleCount: 80,
+    spread: 70,
+    origin: { y: 0.6 },
+  });
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [companies, setCompanies] = useState<TargetCompanyDTO[]>([]);
   const [applications, setApplications] = useState<JobApplicationDTO[]>([]);
   const [events, setEvents] = useState<DomainEventDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const data = await container.getDashboardData();
-      setCompanies(data.companies);
-      setApplications(data.applications);
-      setEvents(data.events);
+      const [companyData, applicationData, eventData] = await Promise.all([
+        apiRequest<TargetCompanyDTO[]>('/api/companies'),
+        apiRequest<JobApplicationDTO[]>('/api/applications'),
+        apiRequest<DomainEventDTO[]>('/api/events'),
+      ]);
+      setCompanies(companyData);
+      setApplications(applicationData);
+      setEvents(eventData);
+      setLoadError(null);
+      return eventData;
     } catch (err) {
-      console.error('Failed to load dashboard data:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+      throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refresh();
-
-    // Subscribe to domain event bus
-    const unsub = container.eventBus.subscribe('*', (event: IDomainEvent) => {
-      console.log('⚡ Domain Event Dispatched:', event.eventType, event);
-      if (
-        event.eventType === 'SELECTION_STAGE_ADVANCED' ||
-        event.eventType === 'JOB_APPLICATION_OFFER_ACCEPTED'
-      ) {
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 },
-        });
-      }
+    refresh().catch(() => {
+      // loadError already holds the message shown in the shell.
     });
-
-    return () => unsub();
   }, [refresh]);
 
   const scheduleInterview = async (cmd: ScheduleInterviewCommand) => {
-    const res = await container.scheduleInterview.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, ...body } = cmd;
+      await apiRequest(`/api/applications/${encodeURIComponent(applicationId)}/interviews`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const proposeSchedule = async (cmd: ProposeScheduleCommand) => {
-    const res = await container.proposeSchedule.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, ...body } = cmd;
+      await apiRequest(`/api/applications/${encodeURIComponent(applicationId)}/proposed-schedules`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const confirmProposedSchedule = async (
@@ -116,104 +141,178 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     proposalId: string,
     slotIndex: number
   ) => {
-    const res = await container.confirmProposedSchedule.execute({
-      applicationId,
-      proposalId,
-      slotIndex,
-    });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/proposed-schedules/${encodeURIComponent(proposalId)}/confirm`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ slotIndex }),
+        }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const cancelProposedSchedule = async (applicationId: string, proposalId: string) => {
-    const res = await container.cancelProposedSchedule.execute({ applicationId, proposalId });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/proposed-schedules/${encodeURIComponent(proposalId)}/cancel`,
+        { method: 'POST' }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const decideAfterCasualInterview = async (
     applicationId: string,
     decision: 'PROCEED' | 'WITHDRAW'
   ) => {
-    const res = await container.decideAfterCasualInterview.execute({ applicationId, decision });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true, nextStageName: res.getValue().nextStageName }
-      : { success: false, error: res.getError() };
+    try {
+      const body = await apiRequest<{ nextStageName?: string }>(
+        `/api/applications/${encodeURIComponent(applicationId)}/casual-decision`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ decision }),
+        }
+      );
+      const nextEvents = await refresh();
+      celebrate(events, nextEvents);
+      return { success: true, nextStageName: body.nextStageName };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const rescheduleInterview = async (cmd: RescheduleInterviewCommand) => {
-    const res = await container.rescheduleInterview.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, sessionId, ...body } = cmd;
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/interviews/${encodeURIComponent(sessionId)}/reschedule`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const assignReverseQuestion = async (cmd: AssignReverseQuestionCommand) => {
-    const res = await container.assignReverseQuestion.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, sessionId, ...body } = cmd;
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/interviews/${encodeURIComponent(sessionId)}/questions`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const recordQuestionAnswer = async (cmd: RecordQuestionAnswerCommand) => {
-    const res = await container.recordQuestionAnswer.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, sessionId, questionId, ...body } = cmd;
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/interviews/${encodeURIComponent(sessionId)}/questions/${encodeURIComponent(questionId)}/answer`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const recordReflection = async (cmd: RecordInterviewReflectionCommand) => {
-    const res = await container.recordInterviewReflection.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, sessionId, ...body } = cmd;
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/interviews/${encodeURIComponent(sessionId)}/reflection`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const toggleTodoStatus = async (appId: string, todoId: string) => {
-    const res = await container.toggleTodoStatus.execute({
-      applicationId: appId,
-      todoId,
-    });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(appId)}/todos/${encodeURIComponent(todoId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({}),
+        }
+      );
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const addCustomTodo = async (cmd: AddCustomTodoCommand) => {
-    const res = await container.addCustomTodo.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { applicationId, ...body } = cmd;
+      await apiRequest(`/api/applications/${encodeURIComponent(applicationId)}/todos`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const advanceStage = async (appId: string) => {
-    const res = await container.advanceSelectionStage.execute({ applicationId: appId });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true, nextStageName: res.getValue().nextStageName }
-      : { success: false, error: res.getError() };
+    try {
+      const body = await apiRequest<{ nextStageName: string }>(
+        `/api/applications/${encodeURIComponent(appId)}/advance`,
+        { method: 'POST' }
+      );
+      const nextEvents = await refresh();
+      celebrate(events, nextEvents);
+      return { success: true, nextStageName: body.nextStageName };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const acceptOffer = async (appId: string) => {
-    const res = await container.rejectOrWithdrawApplication.execute({
-      applicationId: appId,
-      action: 'ACCEPT_OFFER',
-    });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest(`/api/applications/${encodeURIComponent(appId)}/close`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'ACCEPT_OFFER' }),
+      });
+      const nextEvents = await refresh();
+      celebrate(events, nextEvents);
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const rejectOrWithdraw = async (
@@ -221,39 +320,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     action: 'REJECT' | 'WITHDRAW',
     reason?: string
   ) => {
-    const res = await container.rejectOrWithdrawApplication.execute({
-      applicationId: appId,
-      action,
-      reason,
-    });
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest(`/api/applications/${encodeURIComponent(appId)}/close`, {
+        method: 'POST',
+        body: JSON.stringify({ action, reason }),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const createTargetCompany = async (cmd: CreateTargetCompanyCommand) => {
-    const res = await container.createTargetCompany.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest('/api/companies', {
+        method: 'POST',
+        body: JSON.stringify(cmd),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const addStockedQuestion = async (cmd: AddStockedReverseQuestionCommand) => {
-    const res = await container.addStockedReverseQuestion.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      const { companyId, ...body } = cmd;
+      await apiRequest(`/api/companies/${encodeURIComponent(companyId)}/questions`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   const createJobApplication = async (cmd: CreateJobApplicationCommand) => {
-    const res = await container.createJobApplication.execute(cmd);
-    await refresh();
-    return res.isSuccess()
-      ? { success: true }
-      : { success: false, error: res.getError() };
+    try {
+      await apiRequest('/api/applications', {
+        method: 'POST',
+        body: JSON.stringify(cmd),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
   };
 
   return (
@@ -263,6 +379,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         applications,
         events,
         loading,
+        loadError,
         refresh,
         scheduleInterview,
         proposeSchedule,

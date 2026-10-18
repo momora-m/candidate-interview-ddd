@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import { swaggerUI } from '@hono/swagger-ui';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CandidateUseCases } from '@/application/createCandidateUseCases';
+import type { IEventBus } from '@/application/events/IEventBus';
 import type { CandidateQueryService } from '@/application/queries/CandidateQueryService';
+import { toEventDTO } from '@/application/read-model/candidateReadModel';
 import { domainError, jsonBody } from './http';
 import {
   addQuestionSchema,
@@ -33,6 +36,7 @@ export interface ApiRuntime {
   persistence: 'memory' | 'postgres';
   queries: CandidateQueryService;
   useCases: CandidateUseCases;
+  eventBus: IEventBus;
 }
 
 export function createApp(runtime: ApiRuntime) {
@@ -58,6 +62,7 @@ export function createApp(runtime: ApiRuntime) {
         companies: '/api/companies',
         applications: '/api/applications',
         events: '/api/events',
+        eventStream: '/api/events/stream',
       })
     )
     .get('/openapi.yaml', (c) => {
@@ -310,7 +315,38 @@ export function createApp(runtime: ApiRuntime) {
         return c.json(await queries.getApplication(applicationId));
       }
     )
-    .get('/api/events', (c) => c.json(queries.listEvents()));
+    .get('/api/events', async (c) => c.json(await queries.listEvents()))
+    .get('/api/events/stream', (c) => {
+      c.header('X-Accel-Buffering', 'no');
+      return streamSSE(c, async (stream) => {
+        const unsubscribe = runtime.eventBus.subscribe('*', async (event) => {
+          if (stream.aborted || stream.closed) {
+            return;
+          }
+          await stream.writeSSE({
+            event: 'domain-event',
+            id: event.eventId,
+            data: JSON.stringify(toEventDTO(event)),
+          });
+        });
+        stream.onAbort(() => {
+          unsubscribe();
+        });
+        try {
+          for (let elapsed = 0; !stream.aborted && !stream.closed; elapsed += 250) {
+            await stream.sleep(250);
+            if (stream.aborted || stream.closed) {
+              break;
+            }
+            if (elapsed > 0 && elapsed % 15000 === 0) {
+              await stream.writeSSE({ event: 'ping', data: '{}' });
+            }
+          }
+        } finally {
+          unsubscribe();
+        }
+      });
+    });
 }
 
 export type AppType = ReturnType<typeof createApp>;

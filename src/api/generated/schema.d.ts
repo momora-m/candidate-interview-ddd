@@ -391,6 +391,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ドメインイベントの Server-Sent Events 購読
+         * @description コミット済みドメインイベントを `event: domain-event` でプッシュする。
+         *     接続維持のため 15 秒ごとに `event: ping` を送る。
+         */
+        get: operations["streamEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1664,6 +1685,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DomainEvent"][];
+                };
+            };
+        };
+    };
+    streamEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description text/event-stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };

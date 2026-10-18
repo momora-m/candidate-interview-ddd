@@ -2,7 +2,6 @@ import { IJobApplicationRepository } from '@/domain/repositories/IJobApplication
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { ProposedScheduleId } from '@/domain/interview/ProposedScheduleId';
 import { Result } from '@/domain/shared/Result';
-import { IEventBus } from '../events/IEventBus';
 
 export interface CancelProposedScheduleCommand {
   applicationId: string;
@@ -12,7 +11,6 @@ export interface CancelProposedScheduleCommand {
 export class CancelProposedScheduleUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: CancelProposedScheduleCommand): Promise<Result<void>> {
@@ -30,8 +28,6 @@ export class CancelProposedScheduleUseCase {
     if (cancelled.isFailure()) return Result.fail(cancelled.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
     return Result.ok(undefined);
   }
 }

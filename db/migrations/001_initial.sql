@@ -259,3 +259,88 @@ CREATE INDEX IF NOT EXISTS idx_preparation_todos_application
 
 CREATE INDEX IF NOT EXISTS idx_preparation_todos_session
   ON preparation_todos (interview_session_id);
+
+CREATE TABLE IF NOT EXISTS proposed_schedules (
+  id TEXT PRIMARY KEY,
+  application_id TEXT NOT NULL REFERENCES job_applications (id) ON DELETE CASCADE,
+  stage_code TEXT NOT NULL,
+  status TEXT NOT NULL,
+  format_type TEXT NOT NULL,
+  meeting_url TEXT,
+  meeting_platform TEXT,
+  meeting_passcode TEXT,
+  meeting_notes TEXT,
+  location_name TEXT,
+  room_name TEXT,
+  reception_instructions TEXT,
+  estimated_travel_minutes INTEGER,
+  note TEXT NOT NULL DEFAULT '',
+  confirmed_slot_index INTEGER,
+  sort_order INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  CONSTRAINT proposed_schedules_stage_check CHECK (
+    stage_code IN (
+      'DOCUMENT_SCREENING',
+      'CASUAL_INTERVIEW',
+      'FIRST_TECHNICAL',
+      'SECOND_MANAGEMENT',
+      'FINAL_EXECUTIVE',
+      'OFFER_NEGOTIATION',
+      'ACCEPTED',
+      'REJECTED',
+      'WITHDRAWN'
+    )
+  ),
+  CONSTRAINT proposed_schedules_status_check CHECK (
+    status IN ('PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED')
+  ),
+  CONSTRAINT proposed_schedules_sort_check CHECK (sort_order >= 0),
+  CONSTRAINT proposed_schedules_confirmed_index_check CHECK (
+    (
+      status = 'CONFIRMED'
+      AND confirmed_slot_index IS NOT NULL
+      AND confirmed_slot_index >= 0
+    )
+    OR (status <> 'CONFIRMED' AND confirmed_slot_index IS NULL)
+  ),
+  CONSTRAINT proposed_schedules_platform_check CHECK (
+    meeting_platform IS NULL
+    OR meeting_platform IN ('ZOOM', 'GOOGLE_MEET', 'TEAMS', 'OTHER')
+  ),
+  CONSTRAINT proposed_schedules_format_shape CHECK (
+    (
+      format_type = 'ONLINE'
+      AND meeting_url IS NOT NULL
+      AND location_name IS NULL
+      AND room_name IS NULL
+      AND reception_instructions IS NULL
+      AND estimated_travel_minutes IS NULL
+    )
+    OR (
+      format_type = 'IN_PERSON'
+      AND meeting_url IS NULL
+      AND meeting_platform IS NULL
+      AND meeting_passcode IS NULL
+      AND meeting_notes IS NULL
+      AND location_name IS NOT NULL
+      AND room_name IS NOT NULL
+      AND reception_instructions IS NOT NULL
+      AND estimated_travel_minutes IS NOT NULL
+      AND estimated_travel_minutes >= 0
+    )
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_proposed_schedules_application
+  ON proposed_schedules (application_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS proposed_schedule_slots (
+  proposed_schedule_id TEXT NOT NULL REFERENCES proposed_schedules (id) ON DELETE CASCADE,
+  slot_index INTEGER NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (proposed_schedule_id, slot_index),
+  CONSTRAINT proposed_schedule_slots_index_check CHECK (slot_index >= 0),
+  CONSTRAINT proposed_schedule_slots_window_check CHECK (ends_at > starts_at)
+);

@@ -110,9 +110,12 @@ describe('JobApplication Lifecycle & Automatic Task Generation', () => {
       ).getValue(),
     });
 
-    // Attempt to advance stage without reflection
     const advanceRes = app.advanceStage();
     assert.equal(advanceRes.isFailure(), true);
-    assert.match(advanceRes.getError(), /面接振り返り（Reflection）が未入力です/);
+    assert.match(advanceRes.getError(), /正式選考へ進むか見送る/);
+
+    const withoutReflection = app.decideAfterCasualInterview('PROCEED');
+    assert.equal(withoutReflection.isFailure(), true);
+    assert.match(withoutReflection.getError(), /振り返りが未入力です/);
   });
 });

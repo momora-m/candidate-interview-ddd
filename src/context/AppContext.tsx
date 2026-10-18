@@ -6,6 +6,7 @@ import {
   DomainEventDTO,
 } from '@/application/dtos/CandidateApplicationDTOs';
 import { ScheduleInterviewCommand } from '@/application/use-cases/ScheduleInterviewUseCase';
+import { ProposeScheduleCommand } from '@/application/use-cases/ProposeScheduleUseCase';
 import { RescheduleInterviewCommand } from '@/application/use-cases/RescheduleInterviewUseCase';
 import { RecordInterviewReflectionCommand } from '@/application/use-cases/RecordInterviewReflectionUseCase';
 import { RecordQuestionAnswerCommand } from '@/application/use-cases/RecordQuestionAnswerUseCase';
@@ -24,6 +25,20 @@ interface AppContextType {
   loading: boolean;
   refresh: () => Promise<void>;
   scheduleInterview: (cmd: ScheduleInterviewCommand) => Promise<{ success: boolean; error?: string }>;
+  proposeSchedule: (cmd: ProposeScheduleCommand) => Promise<{ success: boolean; error?: string }>;
+  confirmProposedSchedule: (
+    applicationId: string,
+    proposalId: string,
+    slotIndex: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  cancelProposedSchedule: (
+    applicationId: string,
+    proposalId: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  decideAfterCasualInterview: (
+    applicationId: string,
+    decision: 'PROCEED' | 'WITHDRAW'
+  ) => Promise<{ success: boolean; nextStageName?: string; error?: string }>;
   rescheduleInterview: (cmd: RescheduleInterviewCommand) => Promise<{ success: boolean; error?: string }>;
   assignReverseQuestion: (cmd: AssignReverseQuestionCommand) => Promise<{ success: boolean; error?: string }>;
   recordQuestionAnswer: (cmd: RecordQuestionAnswerCommand) => Promise<{ success: boolean; error?: string }>;
@@ -85,6 +100,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await refresh();
     return res.isSuccess()
       ? { success: true }
+      : { success: false, error: res.getError() };
+  };
+
+  const proposeSchedule = async (cmd: ProposeScheduleCommand) => {
+    const res = await container.proposeSchedule.execute(cmd);
+    await refresh();
+    return res.isSuccess()
+      ? { success: true }
+      : { success: false, error: res.getError() };
+  };
+
+  const confirmProposedSchedule = async (
+    applicationId: string,
+    proposalId: string,
+    slotIndex: number
+  ) => {
+    const res = await container.confirmProposedSchedule.execute({
+      applicationId,
+      proposalId,
+      slotIndex,
+    });
+    await refresh();
+    return res.isSuccess()
+      ? { success: true }
+      : { success: false, error: res.getError() };
+  };
+
+  const cancelProposedSchedule = async (applicationId: string, proposalId: string) => {
+    const res = await container.cancelProposedSchedule.execute({ applicationId, proposalId });
+    await refresh();
+    return res.isSuccess()
+      ? { success: true }
+      : { success: false, error: res.getError() };
+  };
+
+  const decideAfterCasualInterview = async (
+    applicationId: string,
+    decision: 'PROCEED' | 'WITHDRAW'
+  ) => {
+    const res = await container.decideAfterCasualInterview.execute({ applicationId, decision });
+    await refresh();
+    return res.isSuccess()
+      ? { success: true, nextStageName: res.getValue().nextStageName }
       : { success: false, error: res.getError() };
   };
 
@@ -207,6 +265,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loading,
         refresh,
         scheduleInterview,
+        proposeSchedule,
+        confirmProposedSchedule,
+        cancelProposedSchedule,
+        decideAfterCasualInterview,
         rescheduleInterview,
         assignReverseQuestion,
         recordQuestionAnswer,

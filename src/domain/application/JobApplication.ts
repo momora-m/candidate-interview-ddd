@@ -8,6 +8,8 @@ import { SelectionStage, StageCode } from './SelectionStage';
 import { ApplicationStatus, ApplicationStatusCode } from './ApplicationStatus';
 import { InterviewSession } from '../interview/InterviewSession';
 import { InterviewSessionId } from '../interview/InterviewSessionId';
+import { ProposedSchedule } from '../interview/ProposedSchedule';
+import { ProposedScheduleId } from '../interview/ProposedScheduleId';
 import { TimeWindow } from '../interview/TimeWindow';
 import { InterviewFormat } from '../interview/InterviewFormat';
 import { StockedReverseQuestion } from '../company/StockedReverseQuestion';
@@ -30,6 +32,10 @@ import {
   JobApplicationRejectedEvent,
   JobApplicationWithdrawnEvent,
   JobApplicationOfferAcceptedEvent,
+  ProposedScheduleSubmittedEvent,
+  ProposedScheduleConfirmedEvent,
+  ProposedScheduleCancelledEvent,
+  CasualInterviewDecisionMadeEvent,
 } from '../events/CandidateDomainEvents';
 
 export interface JobApplicationProps {
@@ -40,6 +46,7 @@ export interface JobApplicationProps {
   currentStage: SelectionStage;
   status: ApplicationStatus;
   sessions: InterviewSession[];
+  proposedSchedules?: ProposedSchedule[];
   todos: PreparationTodo[];
   version: number;
   createdAt: Date;
@@ -53,6 +60,7 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
   private _currentStage: SelectionStage;
   private _status: ApplicationStatus;
   private _sessions: InterviewSession[];
+  private _proposedSchedules: ProposedSchedule[];
   private _todos: PreparationTodo[];
   private _version: number;
   private readonly _createdAt: Date;
@@ -66,6 +74,7 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
     this._currentStage = props.currentStage;
     this._status = props.status;
     this._sessions = props.sessions;
+    this._proposedSchedules = props.proposedSchedules ?? [];
     this._todos = props.todos;
     this._version = props.version;
     this._createdAt = props.createdAt;
@@ -94,6 +103,10 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
 
   public get sessions(): ReadonlyArray<InterviewSession> {
     return this._sessions;
+  }
+
+  public get proposedSchedules(): ReadonlyArray<ProposedSchedule> {
+    return this._proposedSchedules;
   }
 
   public get todos(): ReadonlyArray<PreparationTodo> {
@@ -137,6 +150,7 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
         currentStage: stageResult.getValue(),
         status: ApplicationStatus.inProgress(),
         sessions: [],
+        proposedSchedules: [],
         todos: [],
         version: 1,
         createdAt: now,
@@ -206,6 +220,165 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
     );
 
     return Result.ok(session);
+  }
+
+  /**
+   * Submit one or more candidate slots for a position's stage.
+   * Cross-application booking checks stay in CandidateScheduleConflictDomainService.
+   */
+  public proposeSchedule(props: {
+    stage?: SelectionStage;
+    slots: TimeWindow[];
+    format: InterviewFormat;
+    note?: string;
+  }): Result<ProposedSchedule> {
+    if (this._status.isTerminal) {
+      return Result.fail(
+        `既に選考終了（${this._status.label}）となった応募に候補日を提示することはできません。`
+      );
+    }
+
+    const targetStage = props.stage || this._currentStage;
+    const pendingForStage = this._proposedSchedules.find(
+      (proposal) => proposal.status.isPending && proposal.stage.code === targetStage.code
+    );
+    if (pendingForStage) {
+      return Result.fail(
+        `ステージ「${targetStage.label}」の日程調整がすでに返答待ちです。確定するか取り下げてから、新しい候補日を出してください。`
+      );
+    }
+
+    const created = ProposedSchedule.create({
+      stage: targetStage,
+      slots: props.slots,
+      format: props.format,
+      note: props.note,
+    });
+    if (created.isFailure()) {
+      return Result.fail(created.getError());
+    }
+
+    const proposal = created.getValue();
+    this._proposedSchedules.push(proposal);
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new ProposedScheduleSubmittedEvent(
+        this.id.value,
+        proposal.id.value,
+        targetStage.code,
+        proposal.slots.length
+      )
+    );
+    return Result.ok(proposal);
+  }
+
+  public confirmProposedSchedule(
+    proposalId: ProposedScheduleId,
+    slotIndex: number
+  ): Result<InterviewSession> {
+    const proposal = this._proposedSchedules.find((item) => item.id.equals(proposalId));
+    if (!proposal) {
+      return Result.fail(`ID: ${proposalId.value} の日程調整が見つかりません。`);
+    }
+    if (!proposal.status.isPending) {
+      return Result.fail('返答待ちの日程調整だけ確定できます。');
+    }
+    const slot = proposal.slotAt(slotIndex);
+    if (!slot) {
+      return Result.fail('選択した候補日が見つかりません。');
+    }
+
+    const sessionResult = this.scheduleInterview({
+      stage: proposal.stage,
+      timeWindow: slot,
+      format: proposal.format,
+    });
+    if (sessionResult.isFailure()) {
+      return Result.fail(sessionResult.getError());
+    }
+
+    const confirmed = proposal.confirm(slotIndex);
+    if (confirmed.isFailure()) {
+      return Result.fail(confirmed.getError());
+    }
+
+    const session = sessionResult.getValue();
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new ProposedScheduleConfirmedEvent(
+        this.id.value,
+        proposal.id.value,
+        session.id.value,
+        slotIndex,
+        slot.formatJP()
+      )
+    );
+    return Result.ok(session);
+  }
+
+  public cancelProposedSchedule(proposalId: ProposedScheduleId): Result<void> {
+    const proposal = this._proposedSchedules.find((item) => item.id.equals(proposalId));
+    if (!proposal) {
+      return Result.fail(`ID: ${proposalId.value} の日程調整が見つかりません。`);
+    }
+
+    const cancelled = proposal.cancel();
+    if (cancelled.isFailure()) {
+      return cancelled;
+    }
+
+    this._updatedAt = new Date();
+    this.addDomainEvent(new ProposedScheduleCancelledEvent(this.id.value, proposal.id.value));
+    return Result.ok(undefined);
+  }
+
+  /**
+   * After a casual interview, the candidate decides whether to enter formal
+   * selection. Company pass/fail is not the transition.
+   */
+  public decideAfterCasualInterview(
+    decision: 'PROCEED' | 'WITHDRAW',
+    reason?: string
+  ): Result<{ nextStage: SelectionStage }> {
+    if (this._status.isTerminal) {
+      return Result.fail(`選考終了（${this._status.label}）のため、カジュアル面談後の判断はできません。`);
+    }
+    if (this._currentStage.code !== 'CASUAL_INTERVIEW') {
+      return Result.fail('カジュアル面談中の応募だけが、正式選考へ進むか見送るかを選べます。');
+    }
+
+    if (decision === 'WITHDRAW') {
+      const withdrawn = this.withdraw(reason || 'カジュアル面談の結果、選考を見送る');
+      if (withdrawn.isFailure()) {
+        return Result.fail(withdrawn.getError());
+      }
+      this.addDomainEvent(
+        new CasualInterviewDecisionMadeEvent(this.id.value, 'WITHDRAW', this._currentStage.label)
+      );
+      return Result.ok({ nextStage: this._currentStage });
+    }
+
+    const casualSession = this._sessions.find((session) => session.stage.code === 'CASUAL_INTERVIEW');
+    if (!casualSession) {
+      return Result.fail('カジュアル面談の日程がまだ確定していません。');
+    }
+    if (!casualSession.reflection) {
+      return Result.fail(
+        'カジュアル面談の振り返りが未入力です。正式選考へ進む前に、面談の印象を記録してください。'
+      );
+    }
+
+    const nextStage = this._currentStage.getNextStage();
+    if (!nextStage) {
+      return Result.fail(`現在のステージ「${this._currentStage.label}」は最終段階です。`);
+    }
+
+    const previousLabel = this._currentStage.label;
+    this._currentStage = nextStage;
+    this._updatedAt = new Date();
+    this.addDomainEvent(new SelectionStageAdvancedEvent(this.id.value, previousLabel, nextStage.label));
+    this.addDomainEvent(new CasualInterviewDecisionMadeEvent(this.id.value, 'PROCEED', nextStage.label));
+    return Result.ok({ nextStage });
   }
 
   private generateStagePreparationTodos(session: InterviewSession): void {
@@ -471,6 +644,10 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
   public advanceStage(): Result<{ nextStage: SelectionStage }> {
     if (this._status.isTerminal) {
       return Result.fail(`選考終了（${this._status.label}）のため次のステージに進むことはできません。`);
+    }
+
+    if (this._currentStage.code === 'CASUAL_INTERVIEW') {
+      return Result.fail('カジュアル面談のあとは、正式選考へ進むか見送るかを選んでください。');
     }
 
     const nextStage = this._currentStage.getNextStage();

@@ -12,6 +12,7 @@ import { ApplicationId } from '@/domain/application/ApplicationId';
 import { PositionDetails } from '@/domain/application/PositionDetails';
 import { SalaryRange } from '@/domain/application/SalaryRange';
 import { PositionMotivation } from '@/domain/application/PositionMotivation';
+import { SelectionStage } from '@/domain/application/SelectionStage';
 import { TimeWindow } from '@/domain/interview/TimeWindow';
 import { InterviewFormat } from '@/domain/interview/InterviewFormat';
 import { MeetingUrl } from '@/domain/interview/MeetingUrl';
@@ -231,6 +232,23 @@ export async function seedCandidateData(
       }).getValue()
     );
   }
+
+  const proposalStart = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  proposalStart.setHours(10, 0, 0, 0);
+  const proposalEnd = new Date(proposalStart.getTime() + 60 * 60 * 1000);
+  const secondStart = new Date(proposalStart.getTime() + 4 * 60 * 60 * 1000);
+  const secondEnd = new Date(secondStart.getTime() + 60 * 60 * 1000);
+  app2.proposeSchedule({
+    stage: SelectionStage.create('FIRST_TECHNICAL').getValue(),
+    slots: [
+      TimeWindow.create(proposalStart, proposalEnd).getValue(),
+      TimeWindow.create(secondStart, secondEnd).getValue(),
+    ],
+    format: InterviewFormat.createOnline(
+      MeetingUrl.create('https://meet.google.com/finpay-next').getValue()
+    ).getValue(),
+    note: '一次技術面接の候補として先方へ出している枠',
+  });
 
   await applicationRepo.save(app2);
 }

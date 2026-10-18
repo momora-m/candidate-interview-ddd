@@ -111,6 +111,73 @@ describe('Hono candidate API', () => {
     assert.ok(eventBody.some((event: { eventType: string }) => event.eventType.includes('Scheduled') || event.eventType.length > 0));
   });
 
+  test('refuses to propose a slot that overlaps a confirmed casual interview and can confirm another slot', async () => {
+    const app = testApp();
+    const companyResponse = await postJson(app, '/api/companies', {
+      name: '南十字テック',
+      productSummary: '物流最適化',
+      targetAudience: 'B2B_SMB',
+      revenueStream: '従量課金',
+      primaryLanguages: ['Go'],
+    });
+    const company = await companyResponse.json();
+    const casualResponse = await postJson(app, '/api/applications', {
+      companyId: company.id,
+      initialStageCode: 'CASUAL_INTERVIEW',
+    });
+    assert.equal(casualResponse.status, 201);
+    const casual = await casualResponse.json();
+    assert.equal(casual.positionTitle, 'ポジション未定');
+
+    const proposed = await postJson(app, `/api/applications/${casual.id}/proposed-schedules`, {
+      slots: [
+        { startTime: '2026-12-10T01:00:00.000Z', endTime: '2026-12-10T02:00:00.000Z' },
+        { startTime: '2026-12-11T01:00:00.000Z', endTime: '2026-12-11T02:00:00.000Z' },
+      ],
+      formatType: 'ONLINE',
+      meetingUrl: 'https://meet.google.com/south-cross',
+      note: 'カジュアル面談の候補',
+    });
+    assert.equal(proposed.status, 201);
+    const proposal = await proposed.json();
+
+    const otherCompany = await postJson(app, '/api/companies', {
+      name: '東雲ラボ',
+      productSummary: '実験基盤',
+      targetAudience: 'B2C',
+      revenueStream: '広告',
+      primaryLanguages: ['TypeScript'],
+    });
+    const other = await otherCompany.json();
+    const otherApplication = await postJson(app, '/api/applications', {
+      companyId: other.id,
+      positionTitle: 'Product Engineer',
+      initialStageCode: 'FIRST_TECHNICAL',
+    });
+    const otherApp = await otherApplication.json();
+    const blocked = await postJson(app, `/api/applications/${otherApp.id}/proposed-schedules`, {
+      slots: [{ startTime: '2026-12-10T01:15:00.000Z', endTime: '2026-12-10T02:00:00.000Z' }],
+      formatType: 'ONLINE',
+    });
+    assert.equal(blocked.status, 409);
+
+    const confirmed = await postJson(
+      app,
+      `/api/applications/${casual.id}/proposed-schedules/${proposal.proposalId}/confirm`,
+      { slotIndex: 0 }
+    );
+    assert.equal(confirmed.status, 200);
+    const confirmedBody = await confirmed.json();
+    assert.equal(confirmedBody.application.sessions[0].stageCode, 'CASUAL_INTERVIEW');
+    assert.equal(confirmedBody.application.proposedSchedules[0].statusCode, 'CONFIRMED');
+
+    const decision = await postJson(app, `/api/applications/${casual.id}/casual-decision`, {
+      decision: 'PROCEED',
+    });
+    assert.equal(decision.status, 400);
+    assert.match((await decision.json()).error, /振り返り/);
+  });
+
   test('rejects a malformed company payload before it reaches the domain', async () => {
     const app = testApp();
     const response = await postJson(app, '/api/companies', { name: '' });

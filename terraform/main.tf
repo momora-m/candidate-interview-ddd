@@ -35,6 +35,7 @@ resource "google_sql_database_instance" "default" {
 
   settings {
     # 最小インスタンス tier (月額約 $7〜$10)
+    edition           = "ENTERPRISE"
     tier              = "db-f1-micro"
     disk_type         = "PD_SSD"
     disk_size         = 10

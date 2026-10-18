@@ -135,7 +135,9 @@ docker compose up --build
 - API / Swagger UI: `http://localhost:4317/docs`
 - PostgreSQL: `localhost:54329`（ユーザー / パスワード / DB 名はいずれも `candidate` / `candidate` / `candidate_interview`）
 
-初回起動時、PostgreSQL イメージが `db/migrations/001_initial.sql` と `db/migrations/002_seed.sql` を順に適用します。この初期化はデータボリュームが空のときだけ走ります。サンプルデータを入れ直すときは `docker compose down -v` でボリュームを消してから再起動します。
+初回起動時、PostgreSQL イメージが `db/migrations/001_initial.sql`（スキーマ）と `db/seeds/dev.sql`（ローカル用サンプルデータ）を順に適用します。この初期化はデータボリュームが空のときだけ走ります。サンプルデータを入れ直すときは `docker compose down -v` でボリュームを消してから再起動します。
+
+本番では `db/migrations` だけを適用します。`db/seeds/dev.sql` は開発用 Compose が明示的にマウントしているファイルで、マイグレーション一式には含まれません。
 
 画面は `/api` を API コンテナへ転送します。API は `DATABASE_URL` 付きで PostgreSQL リポジトリを使います。
 
@@ -145,7 +147,7 @@ docker compose up -d postgres
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run db:migrate
 ```
 
-`npm run db:migrate` は `db/migrations/001_initial.sql` だけを適用します。サンプル行は `002_seed.sql` 側です。
+`npm run db:migrate` は `db/migrations/001_initial.sql` だけを適用します。サンプル行は `db/seeds/dev.sql` 側で、このコマンドでは入りません。
 
 ### API サーバー (Hono)
 ```bash

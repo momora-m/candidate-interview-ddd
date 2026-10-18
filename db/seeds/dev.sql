@@ -1,6 +1,6 @@
--- 画面と同じ初期データ。PostgreSQL 公式イメージが空のデータディレクトリで
--- /docker-entrypoint-initdb.d の SQL をファイル名順に実行する。
--- 001_initial.sql の後に流れる。再実行は想定しない（初期化は初回起動時のみ）。
+-- ローカル開発用のサンプルデータ。本番のスキーマ適用対象には含めない。
+-- docker-compose.yml がこのファイルだけを /docker-entrypoint-initdb.d に載せる。
+-- 再実行は想定しない（初期化はデータボリュームが空の初回起動時のみ）。
 
 CREATE TEMP TABLE seed_clock AS
 SELECT

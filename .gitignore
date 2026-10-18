@@ -40,6 +40,7 @@ yarn-error.log*
 **/.terraform/*
 *.tfstate
 *.tfstate.*
+*.lock.hcl
 crash.log
 crash.*.log
 *.tfvars

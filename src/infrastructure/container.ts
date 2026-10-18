@@ -37,6 +37,22 @@ export class CandidateAppContainer {
     return this.useCases.scheduleInterview;
   }
 
+  public get proposeSchedule() {
+    return this.useCases.proposeSchedule;
+  }
+
+  public get confirmProposedSchedule() {
+    return this.useCases.confirmProposedSchedule;
+  }
+
+  public get cancelProposedSchedule() {
+    return this.useCases.cancelProposedSchedule;
+  }
+
+  public get decideAfterCasualInterview() {
+    return this.useCases.decideAfterCasualInterview;
+  }
+
   public get rescheduleInterview() {
     return this.useCases.rescheduleInterview;
   }

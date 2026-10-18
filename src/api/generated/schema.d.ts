@@ -126,6 +126,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/applications/{applicationId}/proposed-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 候補日を企業へ提示する
+         * @description ポジションの選考ステージに対して、1〜5件の候補日時を返答待ちとして登録します。 確定済みの面接（カジュアル面談を含む）および他社へ提示中の候補日と、 時間または移動・準備バッファが重なる場合は 409 を返します。
+         */
+        post: operations["proposeSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/applications/{applicationId}/proposed-schedules/{proposalId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 提示した候補日の1枠を面接として確定する
+         * @description 企業が選んだ枠を InterviewSession に昇格します。選ばれなかった枠は返答待ちではなくなり、 他社の日程調整をブロックしなくなります。カジュアル面談も同じセッションになります。
+         */
+        post: operations["confirmProposedSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/applications/{applicationId}/proposed-schedules/{proposalId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 提示中の候補日を取り下げる */
+        post: operations["cancelProposedSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/applications/{applicationId}/casual-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * カジュアル面談のあと、正式選考へ進むか見送る
+         * @description カジュアル面談は通常の面接セッションですが、終了後の遷移は企業の合否ではなく候補者の判断です。 正式選考へ進むには、確定したカジュアル面談の振り返りが必要です。
+         */
+        post: operations["decideAfterCasualInterview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/applications/{applicationId}/interviews": {
         parameters: {
             query?: never;
@@ -531,6 +608,7 @@ export interface components {
             /** @example false */
             isTerminal: boolean;
             sessions: components["schemas"]["InterviewSession"][];
+            proposedSchedules: components["schemas"]["ProposedSchedule"][];
             todos: components["schemas"]["PreparationTodo"][];
             /** @example 1 */
             version: number;
@@ -581,9 +659,61 @@ export interface components {
             questionText: string;
             hypothesisOrIntent: string;
         };
+        /** @enum {string} */
+        ProposedScheduleStatus: "PENDING" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
+        ProposedScheduleSlot: {
+            slotIndex: number;
+            /** Format: date-time */
+            startTime: string;
+            /** Format: date-time */
+            endTime: string;
+            timeWindowJP: string;
+        };
+        ProposedSchedule: {
+            id: string;
+            stageCode: components["schemas"]["StageCode"];
+            stageLabel: string;
+            statusCode: components["schemas"]["ProposedScheduleStatus"];
+            statusLabel: string;
+            formatType: components["schemas"]["FormatType"];
+            formatSummary: string;
+            note: string;
+            slots: components["schemas"]["ProposedScheduleSlot"][];
+            confirmedSlotIndex?: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProposeScheduleRequest: {
+            stageCode?: components["schemas"]["StageCode"];
+            note?: string;
+            slots: {
+                /** Format: date-time */
+                startTime: string;
+                /** Format: date-time */
+                endTime: string;
+            }[];
+            formatType: components["schemas"]["FormatType"];
+            meetingUrl?: string;
+            meetingPasscode?: string;
+            locationName?: string;
+            roomName?: string;
+            receptionInstructions?: string;
+            estimatedTravelMinutes?: number;
+        };
+        ConfirmProposedScheduleRequest: {
+            slotIndex: number;
+        };
+        CasualDecisionRequest: {
+            /** @enum {string} */
+            decision: "PROCEED" | "WITHDRAW";
+            reason?: string;
+        };
         CreateApplicationRequest: {
             companyId: string;
-            positionTitle: string;
+            /** @description 省略できるのはカジュアル面談の応募だけです。その場合は「ポジション未定」になります。 */
+            positionTitle?: string;
             jobDescriptionUrl?: string;
             salaryMin?: number;
             salaryMax?: number;
@@ -908,6 +1038,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobApplication"];
+                };
+            };
+            /** @description 応募が存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proposeSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description 候補日を提示した */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        proposalId: string;
+                        application: components["schemas"]["JobApplication"];
+                    };
+                };
+            };
+            /** @description 入力またはドメインルール違反 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 応募が存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 確定面接または提示中の候補日と衝突した */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    confirmProposedSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmProposedScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description 面接として確定した */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sessionId: string;
+                        application: components["schemas"]["JobApplication"];
+                    };
+                };
+            };
+            /** @description 入力またはドメインルール違反 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 応募または日程調整が存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 確定しようとした枠が他の予定と衝突した */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancelProposedSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: string;
+                proposalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 取り下げた応募 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplication"];
+                };
+            };
+            /** @description 返答待ちではない */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 応募または日程調整が存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    decideAfterCasualInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CasualDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description 判断を記録した */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        nextStageName: string;
+                        application: components["schemas"]["JobApplication"];
+                    };
+                };
+            };
+            /** @description カジュアル面談中ではない、または振り返りが未入力 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description 応募が存在しない */

@@ -152,6 +152,62 @@ export class JobApplicationWithdrawnEvent extends BaseDomainEvent {
   }
 }
 
+export class ProposedScheduleSubmittedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly proposalId: string,
+    public readonly stageCode: string,
+    public readonly slotCount: number
+  ) {
+    super(aggregateId, 'PROPOSED_SCHEDULE_SUBMITTED', {
+      proposalId,
+      stageCode,
+      slotCount,
+    });
+  }
+}
+
+export class ProposedScheduleConfirmedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly proposalId: string,
+    public readonly sessionId: string,
+    public readonly slotIndex: number,
+    public readonly timeWindowJP: string
+  ) {
+    super(aggregateId, 'PROPOSED_SCHEDULE_CONFIRMED', {
+      proposalId,
+      sessionId,
+      slotIndex,
+      timeWindowJP,
+    });
+  }
+}
+
+export class ProposedScheduleCancelledEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly proposalId: string
+  ) {
+    super(aggregateId, 'PROPOSED_SCHEDULE_CANCELLED', {
+      proposalId,
+    });
+  }
+}
+
+export class CasualInterviewDecisionMadeEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly decision: 'PROCEED' | 'WITHDRAW',
+    public readonly nextStage: string
+  ) {
+    super(aggregateId, 'CASUAL_INTERVIEW_DECISION_MADE', {
+      decision,
+      nextStage,
+    });
+  }
+}
+
 export class JobApplicationOfferAcceptedEvent extends BaseDomainEvent {
   constructor(
     aggregateId: string,

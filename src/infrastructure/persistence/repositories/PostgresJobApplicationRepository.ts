@@ -9,11 +9,15 @@ import {
   interviewSessionToRow,
   jobApplicationToParams,
   preparationTodoToRow,
+  proposedScheduleToRow,
+  proposedSlotToRow,
   toJobApplication,
   type AssignedQuestionRow,
   type InterviewSessionRow,
   type JobApplicationRow,
   type PreparationTodoRow,
+  type ProposedScheduleRow,
+  type ProposedScheduleSlotRow,
 } from '../mappers/JobApplicationMapper';
 import { groupBy, insertRows, isForeignKeyViolation } from '../sql';
 
@@ -35,6 +39,34 @@ const APPLICATION_COLUMNS = [
   'version',
   'created_at',
   'updated_at',
+] as const;
+
+const PROPOSAL_COLUMNS = [
+  'id',
+  'application_id',
+  'stage_code',
+  'status',
+  'format_type',
+  'meeting_url',
+  'meeting_platform',
+  'meeting_passcode',
+  'meeting_notes',
+  'location_name',
+  'room_name',
+  'reception_instructions',
+  'estimated_travel_minutes',
+  'note',
+  'confirmed_slot_index',
+  'sort_order',
+  'created_at',
+  'updated_at',
+] as const;
+
+const PROPOSAL_SLOT_COLUMNS = [
+  'proposed_schedule_id',
+  'slot_index',
+  'starts_at',
+  'ends_at',
 ] as const;
 
 const SESSION_COLUMNS = [
@@ -156,6 +188,14 @@ export class PostgresJobApplicationRepository implements IJobApplicationReposito
         [id.value]
       );
       await tx.query('DELETE FROM preparation_todos WHERE application_id = $1', [id.value]);
+      await tx.query(
+        `DELETE FROM proposed_schedule_slots
+          WHERE proposed_schedule_id IN (
+            SELECT id FROM proposed_schedules WHERE application_id = $1
+          )`,
+        [id.value]
+      );
+      await tx.query('DELETE FROM proposed_schedules WHERE application_id = $1', [id.value]);
       await tx.query('DELETE FROM interview_sessions WHERE application_id = $1', [id.value]);
       await tx.query('DELETE FROM job_applications WHERE id = $1', [id.value]);
     });
@@ -178,7 +218,7 @@ export class PostgresJobApplicationRepository implements IJobApplicationReposito
 
     const ids = applications.rows.map((row) => row.id);
     const placeholders = ids.map((_, index) => `$${index + 1}`).join(', ');
-    const [sessions, todos] = await Promise.all([
+    const [sessions, todos, proposals] = await Promise.all([
       this.db.query<InterviewSessionRow>(
         `SELECT ${SESSION_COLUMNS.join(', ')}
            FROM interview_sessions
@@ -193,7 +233,25 @@ export class PostgresJobApplicationRepository implements IJobApplicationReposito
           ORDER BY application_id ASC, sort_order ASC, id ASC`,
         ids
       ),
+      this.db.query<ProposedScheduleRow>(
+        `SELECT ${PROPOSAL_COLUMNS.join(', ')}
+           FROM proposed_schedules
+          WHERE application_id IN (${placeholders})
+          ORDER BY application_id ASC, sort_order ASC, id ASC`,
+        ids
+      ),
     ]);
+
+    const proposalIds = proposals.rows.map((row) => row.id);
+    const proposalSlots = proposalIds.length
+      ? await this.db.query<ProposedScheduleSlotRow>(
+          `SELECT ${PROPOSAL_SLOT_COLUMNS.join(', ')}
+             FROM proposed_schedule_slots
+            WHERE proposed_schedule_id IN (${proposalIds.map((_, index) => `$${index + 1}`).join(', ')})
+            ORDER BY proposed_schedule_id ASC, slot_index ASC`,
+          proposalIds
+        )
+      : { rows: [] as ProposedScheduleSlotRow[], rowCount: 0 };
 
     const sessionIds = sessions.rows.map((row) => row.id);
     const questions = sessionIds.length
@@ -209,17 +267,24 @@ export class PostgresJobApplicationRepository implements IJobApplicationReposito
     const sessionsByApplication = groupBy(sessions.rows, (row) => row.application_id);
     const todosByApplication = groupBy(todos.rows, (row) => row.application_id);
     const questionsBySession = groupBy(questions.rows, (row) => row.session_id);
+    const proposalsByApplication = groupBy(proposals.rows, (row) => row.application_id);
 
     return applications.rows.map((row) => {
       const applicationSessions = sessionsByApplication.get(row.id) ?? [];
       const applicationQuestions = applicationSessions.flatMap(
         (session) => questionsBySession.get(session.id) ?? []
       );
+      const applicationProposals = proposalsByApplication.get(row.id) ?? [];
+      const applicationSlots = proposalSlots.rows.filter((slot) =>
+        applicationProposals.some((proposal) => proposal.id === slot.proposed_schedule_id)
+      );
       return toJobApplication(
         row,
         applicationSessions,
         applicationQuestions,
-        todosByApplication.get(row.id) ?? []
+        todosByApplication.get(row.id) ?? [],
+        applicationProposals,
+        applicationSlots
       );
     });
   }
@@ -236,6 +301,14 @@ async function replaceChildren(tx: SqlQuery, application: JobApplication): Promi
     [applicationId]
   );
   await tx.query('DELETE FROM preparation_todos WHERE application_id = $1', [applicationId]);
+  await tx.query(
+    `DELETE FROM proposed_schedule_slots
+      WHERE proposed_schedule_id IN (
+        SELECT id FROM proposed_schedules WHERE application_id = $1
+      )`,
+    [applicationId]
+  );
+  await tx.query('DELETE FROM proposed_schedules WHERE application_id = $1', [applicationId]);
   await tx.query('DELETE FROM interview_sessions WHERE application_id = $1', [applicationId]);
 
   await insertRows(
@@ -259,5 +332,22 @@ async function replaceChildren(tx: SqlQuery, application: JobApplication): Promi
     'preparation_todos',
     TODO_COLUMNS,
     application.todos.map((todo, index) => preparationTodoToRow(todo, index))
+  );
+
+  await insertRows(
+    tx,
+    'proposed_schedules',
+    PROPOSAL_COLUMNS,
+    application.proposedSchedules.map((proposal, index) =>
+      proposedScheduleToRow(applicationId, proposal, index)
+    )
+  );
+  await insertRows(
+    tx,
+    'proposed_schedule_slots',
+    PROPOSAL_SLOT_COLUMNS,
+    application.proposedSchedules.flatMap((proposal) =>
+      proposal.slots.map((slot, index) => proposedSlotToRow(proposal.id.value, slot, index))
+    )
   );
 }

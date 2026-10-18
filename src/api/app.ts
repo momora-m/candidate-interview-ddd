@@ -11,9 +11,12 @@ import {
   addQuestionSchema,
   addTodoSchema,
   assignQuestionSchema,
+  casualDecisionSchema,
   closeApplicationSchema,
+  confirmProposedScheduleSchema,
   createApplicationSchema,
   createCompanySchema,
+  proposeScheduleSchema,
   recordAnswerSchema,
   recordReflectionSchema,
   rescheduleInterviewSchema,
@@ -128,6 +131,66 @@ export function createApp(runtime: ApiRuntime) {
         }
         const application = await queries.getApplication(applicationId);
         return c.json({ sessionId: result.getValue().sessionId, application }, 201);
+      }
+    )
+    .post(
+      '/api/applications/:applicationId/proposed-schedules',
+      jsonBody(proposeScheduleSchema),
+      async (c) => {
+        const applicationId = c.req.param('applicationId');
+        const result = await useCases.proposeSchedule.execute({
+          applicationId,
+          ...c.req.valid('json'),
+        });
+        if (result.isFailure()) {
+          return domainError(c, result.getError());
+        }
+        const application = await queries.getApplication(applicationId);
+        return c.json({ proposalId: result.getValue().proposalId, application }, 201);
+      }
+    )
+    .post(
+      '/api/applications/:applicationId/proposed-schedules/:proposalId/confirm',
+      jsonBody(confirmProposedScheduleSchema),
+      async (c) => {
+        const applicationId = c.req.param('applicationId');
+        const result = await useCases.confirmProposedSchedule.execute({
+          applicationId,
+          proposalId: c.req.param('proposalId'),
+          slotIndex: c.req.valid('json').slotIndex,
+        });
+        if (result.isFailure()) {
+          return domainError(c, result.getError());
+        }
+        const application = await queries.getApplication(applicationId);
+        return c.json({ sessionId: result.getValue().sessionId, application });
+      }
+    )
+    .post('/api/applications/:applicationId/proposed-schedules/:proposalId/cancel', async (c) => {
+      const applicationId = c.req.param('applicationId');
+      const result = await useCases.cancelProposedSchedule.execute({
+        applicationId,
+        proposalId: c.req.param('proposalId'),
+      });
+      if (result.isFailure()) {
+        return domainError(c, result.getError());
+      }
+      return c.json(await queries.getApplication(applicationId));
+    })
+    .post(
+      '/api/applications/:applicationId/casual-decision',
+      jsonBody(casualDecisionSchema),
+      async (c) => {
+        const applicationId = c.req.param('applicationId');
+        const result = await useCases.decideAfterCasualInterview.execute({
+          applicationId,
+          ...c.req.valid('json'),
+        });
+        if (result.isFailure()) {
+          return domainError(c, result.getError());
+        }
+        const application = await queries.getApplication(applicationId);
+        return c.json({ nextStageName: result.getValue().nextStageName, application });
       }
     )
     .post(

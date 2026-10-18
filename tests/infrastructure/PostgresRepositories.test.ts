@@ -42,6 +42,8 @@ describe('PostgreSQL aggregate repositories', () => {
       TRUNCATE TABLE
         assigned_reverse_questions,
         preparation_todos,
+        proposed_schedule_slots,
+        proposed_schedules,
         interview_sessions,
         job_applications,
         stocked_reverse_questions,
@@ -299,6 +301,41 @@ describe('PostgreSQL aggregate repositories', () => {
     );
     await assert.rejects(() => applications.save(application), PersistenceError);
     assert.equal(await count(db, 'job_applications'), 0);
+  });
+
+  test('round-trips a pending proposal and releases the other slots on confirm', async () => {
+    const company = sampleCompany();
+    await companies.save(company);
+    const application = sampleApplication(company.id, company.stockedQuestions[0]);
+    const proposed = application.proposeSchedule({
+      stage: SelectionStage.create('CASUAL_INTERVIEW').getValue(),
+      slots: [
+        TimeWindow.create('2026-12-02T01:00:00.000Z', '2026-12-02T02:00:00.000Z').getValue(),
+        TimeWindow.create('2026-12-03T01:00:00.000Z', '2026-12-03T02:00:00.000Z').getValue(),
+      ],
+      format: InterviewFormat.createOnline(MeetingUrl.create('https://meet.google.com/hold-slot').getValue()).getValue(),
+      note: 'カジュアル面談の候補',
+    });
+    assert.ok(proposed.isSuccess());
+    await applications.save(application);
+
+    const loaded = await applications.findById(application.id);
+    assert.ok(loaded);
+    assert.equal(loaded.proposedSchedules.length, 1);
+    assert.equal(loaded.proposedSchedules[0].status.code, 'PENDING');
+    assert.equal(loaded.proposedSchedules[0].slots.length, 2);
+    assert.equal(loaded.proposedSchedules[0].note, 'カジュアル面談の候補');
+
+    const confirmed = loaded.confirmProposedSchedule(loaded.proposedSchedules[0].id, 1);
+    assert.ok(confirmed.isSuccess());
+    await applications.save(loaded);
+
+    const after = await applications.findById(application.id);
+    assert.ok(after);
+    assert.equal(after.proposedSchedules[0].status.code, 'CONFIRMED');
+    assert.equal(after.proposedSchedules[0].confirmedSlotIndex, 1);
+    assert.equal(after.sessions.at(-1)?.stage.code, 'CASUAL_INTERVIEW');
+    assert.equal(await count(db, 'proposed_schedule_slots'), 2);
   });
 });
 

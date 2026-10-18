@@ -7,8 +7,52 @@ services:
       POSTGRES_DB: candidate_interview
     ports:
       - "54329:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U candidate -d candidate_interview"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    environment:
+      DATABASE_URL: postgres://candidate:candidate@postgres:5432/candidate_interview
+      PORT: "4317"
+      TZ: Asia/Tokyo
+    ports:
+      - "4317:4317"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4317/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    ports:
+      - "3847:3847"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

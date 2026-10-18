@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppProvider } from '@/context/AppContext';
+import { AppProvider, useApp } from '@/context/AppContext';
 import { Navbar, ActiveTab } from '@/components/Navbar';
 import { PipelineView } from '@/components/Views/PipelineView';
 import { CompanyIntelligenceView } from '@/components/Views/CompanyIntelligenceView';
@@ -14,6 +14,7 @@ import { CreateApplicationModal } from '@/components/Modals/CreateApplicationMod
 import { AddCustomTodoModal } from '@/components/Modals/AddCustomTodoModal';
 
 export const AppContent: React.FC = () => {
+  const { loadError } = useApp();
   const [activeTab, setActiveTab] = useState<ActiveTab>('pipeline');
 
   // Modal States
@@ -84,6 +85,11 @@ export const AppContent: React.FC = () => {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loadError && (
+          <div className="mb-6 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            データを読み込めませんでした。{loadError}
+          </div>
+        )}
         {activeTab === 'pipeline' && (
           <PipelineView
             onOpenScheduleModal={openScheduleModal}

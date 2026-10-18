@@ -124,15 +124,28 @@ npm test
 ```
 ドメイン・ユースケースに加え、PostgreSQL リポジトリの統合テストも実行します。テスト用データベースはプロセス内の PGlite なので、Docker や接続文字列は不要です。pull request と `main` への push では `.github/workflows/test.yml` が `npm run build` と `npm test` を実行します。GitHub の Public リポジトリではこの実行時間は無料です。
 
-### PostgreSQL（任意）
-ローカルの PostgreSQL 16 を使う場合:
+### Docker で画面・API・PostgreSQL をまとめて起動する
+ホストに Node.js や PostgreSQL を入れずに動かす場合:
 
 ```bash
-docker compose up -d
+docker compose up --build
+```
+
+- 画面: `http://localhost:3847`
+- API / Swagger UI: `http://localhost:4317/docs`
+- PostgreSQL: `localhost:54329`（ユーザー / パスワード / DB 名はいずれも `candidate` / `candidate` / `candidate_interview`）
+
+初回起動時、PostgreSQL イメージが `db/migrations/001_initial.sql` と `db/migrations/002_seed.sql` を順に適用します。この初期化はデータボリュームが空のときだけ走ります。サンプルデータを入れ直すときは `docker compose down -v` でボリュームを消してから再起動します。
+
+画面は `/api` を API コンテナへ転送します。API は `DATABASE_URL` 付きで PostgreSQL リポジトリを使います。
+
+### PostgreSQL だけを使う場合
+```bash
+docker compose up -d postgres
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run db:migrate
 ```
 
-`npm run db:migrate` は `db/migrations/001_initial.sql` を適用します。画面のプロトタイプは引き続きインメモリリポジトリを使います。
+`npm run db:migrate` は `db/migrations/001_initial.sql` だけを適用します。サンプル行は `002_seed.sql` 側です。
 
 ### API サーバー (Hono)
 ```bash
@@ -157,10 +170,14 @@ const companies = await client.api.companies.$get();
 ```
 
 ### 開発サーバーの起動 (Vite)
+API を先に起動してから画面を開きます。Vite は `/api` を `127.0.0.1:4317` へ転送します。
+
 ```bash
+npm run api
 npm run dev
 ```
-ブラウザで `http://localhost:3847` を開くと、DDDプラットフォームのUIが表示されます。
+
+ブラウザで `http://localhost:3847` を開くと、DDDプラットフォームのUIが表示されます。画面の読み書きは Hono API 経由です。
 
 ### プロダクションビルド
 ```bash

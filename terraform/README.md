@@ -26,7 +26,7 @@
 ## 2. インフラ構成図 (ADR-0011 準拠)
 
 ```text
-[ ユーザー (candidate@example.com) ]
+[ ユーザー (Google 認証済みユーザー) ]
          │ (Google アカウント認証)
          ▼
 [ Google Cloud IAP (Identity-Aware Proxy) ]
@@ -69,7 +69,7 @@ cp terraform.tfvars.example terraform.tfvars
 `terraform.tfvars` を編集:
 ```hcl
 project_id         = "your-gcp-project-id"
-allowed_user_email = "candidate@example.com"
+allowed_user_email = "your-email@example.com"
 ```
 
 ### ステップ 2: Terraform State バケットの準備（推奨）

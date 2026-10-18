@@ -21,8 +21,8 @@ app_name = "candidate-interview"
 db_name = "candidate_interview"
 db_user = "candidate_app"
 
-# 認証・アクセスを許可する候補者自身の Google アカウント
-allowed_user_email = "candidate@example.com"
+# 認証・アクセスを許可する Google アカウントのメールアドレス
+allowed_user_email = "your-email@example.com"
 
 # Artifact Registry などに push したコンテナイメージ
 # 初回デプロイ時はプレースホルダーのままでも構いません

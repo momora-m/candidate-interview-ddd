@@ -28,9 +28,8 @@ variable "db_user" {
 }
 
 variable "allowed_user_email" {
-  description = "IAP アクセスおよび JWT 検証を許可する候補者自身の Google アカウントのメールアドレス"
+  description = "IAP アクセスおよび JWT 検証を許可する Google アカウントのメールアドレス"
   type        = string
-  default     = "candidate@example.com"
 }
 
 variable "container_image" {

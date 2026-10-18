@@ -4,7 +4,7 @@
 - **決定日**: 2026-10-18
 
 ## コンテキスト (Context)
-本アプリケーションは候補者自身（単一ユーザー: `candidate@example.com`）が実際の転職活動で利用する本番システムである。
+本アプリケーションは候補者自身（単一ユーザー）が実際の転職活動で利用する本番システムである。
 デプロイ先として Google Cloud を採用するにあたり、以下の要件を満たすインフラ・認証設計が求められた：
 
 1. **最小運用コストとゼロアイドル課金**:
@@ -23,7 +23,7 @@
   - `/api/*`、`/docs`、`/openapi.yaml` 以外のリクエストに対して `index.html`（SPA フォールバック）を同一オリジンで配信。
   - `--add-cloudsql-instances` オプションにより、VPC Connector 不要のセキュアな Unix ドメインソケット経由で Cloud SQL へ接続。
 - **Cloud IAP (Identity-Aware Proxy) Direct Integration**:
-  - Cloud Run サービスに直接 IAP を有効化し、IAM ポリシーで `user:candidate@example.com` にのみ `roles/iap.httpsResourceAccessor` を付与。
+  - Cloud Run サービスに直接 IAP を有効化し、IAM ポリシーで許可された候補者本人の Google アカウントにのみ `roles/iap.httpsResourceAccessor` を付与。
 - **Cloud SQL for PostgreSQL**:
   - `db-f1-micro` インスタンス（10GB SSD）にて `db/migrations/001_initial.sql` を永続化。
 
@@ -32,7 +32,7 @@ Hono の認証ミドルウェアにおいて、IAP が付与する `X-Goog-IAP-J
 1. **公開鍵署名検証**: Google 公開鍵エンドポイント（JWKS: `https://www.gstatic.com/iap/verify/public_key-jwk`）の鍵セットを用いて ES256 署名を検証。
 2. **Audience (`aud`) 検証**: JWT の `aud` クレームが `/projects/PROJECT_NUMBER/apps/PROJECT_ID`（または Cloud Run サービス ID）と完全一致することを確認（リプレイ攻撃防止）。
 3. **Issuer (`iss`) & 有効期限 (`exp`) 検証**: `iss === 'https://cloud.google.com/iap'` かつ現在時刻が有効期限内であることを確認。
-4. **認可メール照合**: ペイロード内の `email` クレームが許可対象（`candidate@example.com`）と一致することを確認。
+4. **認可メール照合**: ペイロード内の `email` クレームが許可対象（環境変数 `IAP_ALLOWED_EMAIL`）と一致することを確認。
 5. **環境分離**: `NODE_ENV === 'production'` では JWT 不正または未付与のリクエストを即座に `401 Unauthorized` で遮断。開発・テスト環境では環境変数ベースのモック認証を許可。
 
 ## 影響とトレードオフ (Consequences)

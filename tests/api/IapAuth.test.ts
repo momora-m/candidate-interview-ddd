@@ -81,7 +81,7 @@ describe('IAP JWT middleware', () => {
     assert.equal(stranger.status, 403);
 
     const allowed = await app.request('/api/companies', {
-      headers: { [IAP_JWT_HEADER]: await sign('Kaito.Mishina@gmail.com') },
+      headers: { [IAP_JWT_HEADER]: await sign('Candidate@example.com') },
     });
     assert.equal(allowed.status, 200);
     assert.ok(Array.isArray(await allowed.json()));

@@ -9,7 +9,8 @@ services:
       - "54329:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./db/migrations/001_initial.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./db/seeds/dev.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U candidate -d candidate_interview"]
       interval: 5s

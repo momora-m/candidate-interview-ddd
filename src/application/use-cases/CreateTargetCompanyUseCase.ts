@@ -1,5 +1,4 @@
 import { ITargetCompanyRepository } from '@/domain/repositories/ITargetCompanyRepository';
-import { IEventBus } from '../events/IEventBus';
 import { TargetCompany } from '@/domain/company/TargetCompany';
 import { CompanyProfile } from '@/domain/company/CompanyProfile';
 import { BusinessModel, TargetAudience } from '@/domain/company/BusinessModel';
@@ -24,7 +23,6 @@ export interface CreateTargetCompanyCommand {
 export class CreateTargetCompanyUseCase {
   constructor(
     private readonly companyRepo: ITargetCompanyRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: CreateTargetCompanyCommand): Promise<Result<TargetCompany>> {
@@ -60,9 +58,6 @@ export class CreateTargetCompanyUseCase {
 
     const company = companyRes.getValue();
     await this.companyRepo.save(company);
-    await this.eventBus.publishAll(company.domainEvents);
-    company.clearEvents();
-
     return Result.ok(company);
   }
 }

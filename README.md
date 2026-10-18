@@ -147,7 +147,7 @@ docker compose up -d postgres
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run db:migrate
 ```
 
-`npm run db:migrate` は `db/migrations/001_initial.sql` だけを適用します。サンプル行は `002_seed.sql` 側です。
+`npm run db:migrate` は `db/migrations/001_initial.sql` と `db/migrations/003_domain_events_and_read_models.sql` を適用します。サンプル行は `002_seed.sql` 側です。API 起動時にも同じスキーマを適用し、書き込みモデルから画面用リードモデルを組み直します。
 
 ### API サーバー (Hono)
 ```bash
@@ -159,7 +159,7 @@ npm run api
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run api
 ```
 
-待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。
+待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。画面向けの GET は集約を組み立てず、リードモデルの文書を 1 回の SELECT で返します。`GET /api/events/stream` はコミット後のドメインイベントを Server-Sent Events で流します。
 
 型だけ共有するクライアントの例:
 

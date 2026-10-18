@@ -1,6 +1,5 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
 import { ITargetCompanyRepository } from '@/domain/repositories/ITargetCompanyRepository';
-import { IEventBus } from '../events/IEventBus';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { InterviewSessionId } from '@/domain/interview/InterviewSessionId';
 import { Result } from '@/domain/shared/Result';
@@ -16,7 +15,6 @@ export class AssignReverseQuestionUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
     private readonly companyRepo: ITargetCompanyRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: AssignReverseQuestionCommand): Promise<Result<void>> {
@@ -45,9 +43,6 @@ export class AssignReverseQuestionUseCase {
     if (res.isFailure()) return res;
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok(undefined);
   }
 }

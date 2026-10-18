@@ -1,20 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { createCandidateUseCases } from '../../src/application/createCandidateUseCases';
-import { CandidateQueryService } from '../../src/application/queries/CandidateQueryService';
+import { createInMemoryCandidateRuntime } from '../../src/infrastructure/createCandidateRuntime';
 import { createApp } from '../../src/api/app';
-import { InMemoryEventBus } from '../../src/infrastructure/event-bus/InMemoryEventBus';
-import { InMemoryJobApplicationRepository } from '../../src/infrastructure/repositories/InMemoryJobApplicationRepository';
-import { InMemoryTargetCompanyRepository } from '../../src/infrastructure/repositories/InMemoryTargetCompanyRepository';
 
 function testApp() {
-  const companyRepo = new InMemoryTargetCompanyRepository();
-  const applicationRepo = new InMemoryJobApplicationRepository();
-  const eventBus = new InMemoryEventBus();
+  const runtime = createInMemoryCandidateRuntime();
   return createApp({
-    persistence: 'memory',
-    queries: new CandidateQueryService(companyRepo, applicationRepo, eventBus),
-    useCases: createCandidateUseCases(companyRepo, applicationRepo, eventBus),
+    persistence: runtime.persistence,
+    queries: runtime.queries,
+    useCases: runtime.useCases,
+    eventBus: runtime.eventBus,
   });
 }
 
@@ -196,5 +191,36 @@ describe('Hono candidate API', () => {
     const docs = await app.request('/docs');
     assert.equal(docs.status, 200);
     assert.match(await docs.text(), /SwaggerUI/);
+  });
+
+  test('pushes a domain event to an open SSE client', async () => {
+    const app = testApp();
+    const stream = await app.request('/api/events/stream');
+    assert.equal(stream.status, 200);
+    assert.match(stream.headers.get('content-type') ?? '', /text\/event-stream/);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const created = await postJson(app, '/api/companies', {
+      name: 'SSEテック',
+      productSummary: '通知',
+      targetAudience: 'B2C',
+      revenueStream: '広告',
+      primaryLanguages: ['TypeScript'],
+    });
+    assert.equal(created.status, 201);
+
+    const reader = stream.body?.getReader();
+    assert.ok(reader);
+    const decoder = new TextDecoder();
+    let text = '';
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline && !text.includes('TARGET_COMPANY_REGISTERED')) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value);
+    }
+    assert.match(text, /event: domain-event/);
+    assert.match(text, /TARGET_COMPANY_REGISTERED/);
+    await reader.cancel();
   });
 });

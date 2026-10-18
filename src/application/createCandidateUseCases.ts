@@ -1,4 +1,3 @@
-import type { IEventBus } from '@/application/events/IEventBus';
 import { AddCustomTodoUseCase } from '@/application/use-cases/AddCustomTodoUseCase';
 import { AddStockedReverseQuestionUseCase } from '@/application/use-cases/AddStockedReverseQuestionUseCase';
 import { AdvanceSelectionStageUseCase } from '@/application/use-cases/AdvanceSelectionStageUseCase';
@@ -39,25 +38,24 @@ export interface CandidateUseCases {
 
 export function createCandidateUseCases(
   companyRepo: ITargetCompanyRepository,
-  applicationRepo: IJobApplicationRepository,
-  eventBus: IEventBus
+  applicationRepo: IJobApplicationRepository
 ): CandidateUseCases {
   return {
-    createTargetCompany: new CreateTargetCompanyUseCase(companyRepo, eventBus),
-    addStockedReverseQuestion: new AddStockedReverseQuestionUseCase(companyRepo, eventBus),
-    createJobApplication: new CreateJobApplicationUseCase(applicationRepo, companyRepo, eventBus),
-    scheduleInterview: new ScheduleInterviewUseCase(applicationRepo, eventBus),
-    proposeSchedule: new ProposeScheduleUseCase(applicationRepo, eventBus),
-    confirmProposedSchedule: new ConfirmProposedScheduleUseCase(applicationRepo, eventBus),
-    cancelProposedSchedule: new CancelProposedScheduleUseCase(applicationRepo, eventBus),
-    decideAfterCasualInterview: new DecideAfterCasualInterviewUseCase(applicationRepo, eventBus),
-    rescheduleInterview: new RescheduleInterviewUseCase(applicationRepo, eventBus),
-    assignReverseQuestion: new AssignReverseQuestionUseCase(applicationRepo, companyRepo, eventBus),
-    recordQuestionAnswer: new RecordQuestionAnswerUseCase(applicationRepo, eventBus),
-    recordInterviewReflection: new RecordInterviewReflectionUseCase(applicationRepo, eventBus),
-    toggleTodoStatus: new ToggleTodoStatusUseCase(applicationRepo, eventBus),
-    advanceSelectionStage: new AdvanceSelectionStageUseCase(applicationRepo, eventBus),
-    rejectOrWithdrawApplication: new RejectOrWithdrawApplicationUseCase(applicationRepo, eventBus),
-    addCustomTodo: new AddCustomTodoUseCase(applicationRepo, eventBus),
+    createTargetCompany: new CreateTargetCompanyUseCase(companyRepo),
+    addStockedReverseQuestion: new AddStockedReverseQuestionUseCase(companyRepo),
+    createJobApplication: new CreateJobApplicationUseCase(applicationRepo, companyRepo),
+    scheduleInterview: new ScheduleInterviewUseCase(applicationRepo),
+    proposeSchedule: new ProposeScheduleUseCase(applicationRepo),
+    confirmProposedSchedule: new ConfirmProposedScheduleUseCase(applicationRepo),
+    cancelProposedSchedule: new CancelProposedScheduleUseCase(applicationRepo),
+    decideAfterCasualInterview: new DecideAfterCasualInterviewUseCase(applicationRepo),
+    rescheduleInterview: new RescheduleInterviewUseCase(applicationRepo),
+    assignReverseQuestion: new AssignReverseQuestionUseCase(applicationRepo, companyRepo),
+    recordQuestionAnswer: new RecordQuestionAnswerUseCase(applicationRepo),
+    recordInterviewReflection: new RecordInterviewReflectionUseCase(applicationRepo),
+    toggleTodoStatus: new ToggleTodoStatusUseCase(applicationRepo),
+    advanceSelectionStage: new AdvanceSelectionStageUseCase(applicationRepo),
+    rejectOrWithdrawApplication: new RejectOrWithdrawApplicationUseCase(applicationRepo),
+    addCustomTodo: new AddCustomTodoUseCase(applicationRepo),
   };
 }

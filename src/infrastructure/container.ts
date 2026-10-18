@@ -1,9 +1,7 @@
-import { createCandidateUseCases } from '@/application/createCandidateUseCases';
-import { toApplicationDTO, toCompanyDTO, toEventDTO } from '@/application/read-model/candidateReadModel';
-import { InMemoryTargetCompanyRepository } from './repositories/InMemoryTargetCompanyRepository';
-import { InMemoryJobApplicationRepository } from './repositories/InMemoryJobApplicationRepository';
-import { InMemoryEventBus } from './event-bus/InMemoryEventBus';
-import { seedCandidateData } from './seeds/SeedCandidateData';
+import {
+  createInMemoryCandidateRuntime,
+  type CandidateRuntime,
+} from '@/infrastructure/createCandidateRuntime';
 import {
   TargetCompanyDTO,
   JobApplicationDTO,
@@ -11,85 +9,88 @@ import {
 } from '@/application/dtos/CandidateApplicationDTOs';
 
 export class CandidateAppContainer {
-  public readonly companyRepo = new InMemoryTargetCompanyRepository();
-  public readonly applicationRepo = new InMemoryJobApplicationRepository();
-  public readonly eventBus = new InMemoryEventBus();
+  private readonly runtime: CandidateRuntime = createInMemoryCandidateRuntime();
+  private initialized = false;
 
-  private readonly useCases = createCandidateUseCases(
-    this.companyRepo,
-    this.applicationRepo,
-    this.eventBus
-  );
+  public get companyRepo() {
+    return this.runtime.companyRepository;
+  }
+
+  public get applicationRepo() {
+    return this.runtime.applicationRepository;
+  }
+
+  public get eventBus() {
+    return this.runtime.eventBus;
+  }
 
   public get createTargetCompany() {
-    return this.useCases.createTargetCompany;
+    return this.runtime.useCases.createTargetCompany;
   }
 
   public get addStockedReverseQuestion() {
-    return this.useCases.addStockedReverseQuestion;
+    return this.runtime.useCases.addStockedReverseQuestion;
   }
 
   public get createJobApplication() {
-    return this.useCases.createJobApplication;
+    return this.runtime.useCases.createJobApplication;
   }
 
   public get scheduleInterview() {
-    return this.useCases.scheduleInterview;
+    return this.runtime.useCases.scheduleInterview;
   }
 
   public get proposeSchedule() {
-    return this.useCases.proposeSchedule;
+    return this.runtime.useCases.proposeSchedule;
   }
 
   public get confirmProposedSchedule() {
-    return this.useCases.confirmProposedSchedule;
+    return this.runtime.useCases.confirmProposedSchedule;
   }
 
   public get cancelProposedSchedule() {
-    return this.useCases.cancelProposedSchedule;
+    return this.runtime.useCases.cancelProposedSchedule;
   }
 
   public get decideAfterCasualInterview() {
-    return this.useCases.decideAfterCasualInterview;
+    return this.runtime.useCases.decideAfterCasualInterview;
   }
 
   public get rescheduleInterview() {
-    return this.useCases.rescheduleInterview;
+    return this.runtime.useCases.rescheduleInterview;
   }
 
   public get assignReverseQuestion() {
-    return this.useCases.assignReverseQuestion;
+    return this.runtime.useCases.assignReverseQuestion;
   }
 
   public get recordQuestionAnswer() {
-    return this.useCases.recordQuestionAnswer;
+    return this.runtime.useCases.recordQuestionAnswer;
   }
 
   public get recordInterviewReflection() {
-    return this.useCases.recordInterviewReflection;
+    return this.runtime.useCases.recordInterviewReflection;
   }
 
   public get toggleTodoStatus() {
-    return this.useCases.toggleTodoStatus;
+    return this.runtime.useCases.toggleTodoStatus;
   }
 
   public get advanceSelectionStage() {
-    return this.useCases.advanceSelectionStage;
+    return this.runtime.useCases.advanceSelectionStage;
   }
 
   public get rejectOrWithdrawApplication() {
-    return this.useCases.rejectOrWithdrawApplication;
+    return this.runtime.useCases.rejectOrWithdrawApplication;
   }
 
   public get addCustomTodo() {
-    return this.useCases.addCustomTodo;
+    return this.runtime.useCases.addCustomTodo;
   }
-
-  private initialized = false;
 
   public async init(): Promise<void> {
     if (this.initialized) return;
-    await seedCandidateData(this.companyRepo, this.applicationRepo, this.eventBus);
+    await this.runtime.prepare();
     this.initialized = true;
   }
 
@@ -99,27 +100,12 @@ export class CandidateAppContainer {
     events: DomainEventDTO[];
   }> {
     await this.init();
-
-    const [rawCompanies, rawApps] = await Promise.all([
-      this.companyRepo.findAll(),
-      this.applicationRepo.findAll(),
+    const [companies, applications, events] = await Promise.all([
+      this.runtime.queries.listCompanies(),
+      this.runtime.queries.listApplications(),
+      this.runtime.queries.listEvents(),
     ]);
-
-    const companyNames = new Map(rawCompanies.map((company) => [company.id.value, company.name]));
-
-    const companyDTOs: TargetCompanyDTO[] = rawCompanies.map(toCompanyDTO);
-
-    const applicationDTOs: JobApplicationDTO[] = rawApps.map((application) =>
-      toApplicationDTO(application, companyNames.get(application.companyId.value))
-    );
-
-    const eventDTOs: DomainEventDTO[] = this.eventBus.getHistory().map(toEventDTO);
-
-    return {
-      companies: companyDTOs,
-      applications: applicationDTOs,
-      events: eventDTOs,
-    };
+    return { companies, applications, events };
   }
 }
 

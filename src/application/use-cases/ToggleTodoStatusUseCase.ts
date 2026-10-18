@@ -1,5 +1,4 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
-import { IEventBus } from '../events/IEventBus';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { TodoId } from '@/domain/todo/TodoId';
 import { TaskStatus, TaskStatusCode } from '@/domain/todo/TaskStatus';
@@ -14,7 +13,6 @@ export interface ToggleTodoStatusCommand {
 export class ToggleTodoStatusUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: ToggleTodoStatusCommand): Promise<Result<void>> {
@@ -47,9 +45,6 @@ export class ToggleTodoStatusUseCase {
     if (res.isFailure()) return res;
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok(undefined);
   }
 }

@@ -15,7 +15,7 @@ import {
 import { useApp } from '@/context/AppContext';
 
 export const DomainExplorerView: React.FC = () => {
-  const { events, applications, companies } = useApp();
+  const { events, eventsLive, applications, companies } = useApp();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(events[0]?.eventId || null);
 
   const selectedEvent = events.find((e) => e.eventId === selectedEventId) || events[0];
@@ -112,14 +112,14 @@ export const DomainExplorerView: React.FC = () => {
       <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
-            <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+            <div className={`w-3 h-3 rounded-full ${eventsLive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`}></div>
             <h3 className="text-sm font-bold text-white flex items-center space-x-2">
               <Radio className="w-4 h-4 text-emerald-400" />
               <span>リアルタイム・ドメインイベントバス (Domain Event Bus Log: {events.length} events)</span>
             </h3>
           </div>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
-            In-Memory Event Dispatcher (GCP Pub/Sub Ready)
+            {eventsLive ? 'SSE 接続中' : 'SSE 再接続中'}
           </span>
         </div>
 

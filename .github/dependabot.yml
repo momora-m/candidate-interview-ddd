@@ -7,3 +7,8 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    ignore:
+      # Major bumps often break peer dependencies, so only minor and patch updates are opened.
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major

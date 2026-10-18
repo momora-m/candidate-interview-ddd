@@ -172,11 +172,6 @@ resource "google_cloud_run_v2_service" "default" {
       }
 
       env {
-        name  = "PORT"
-        value = "8080"
-      }
-
-      env {
         name  = "INSTANCE_CONNECTION_NAME"
         value = google_sql_database_instance.default.connection_name
       }

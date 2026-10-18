@@ -9,7 +9,9 @@ import type { CandidateUseCases } from '@/application/createCandidateUseCases';
 import type { IEventBus } from '@/application/events/IEventBus';
 import type { CandidateQueryService } from '@/application/queries/CandidateQueryService';
 import { toEventDTO } from '@/application/read-model/candidateReadModel';
+import { createIapAuthMiddleware, type IapAuthConfig, type IapJwtVerifier } from './auth/iapAuth';
 import { domainError, jsonBody } from './http';
+import { staticFileResponse } from './staticSpa';
 import {
   addQuestionSchema,
   addTodoSchema,
@@ -32,11 +34,31 @@ const openapiYamlPath = resolve(
   '../../docs/openapi/openapi.yaml'
 );
 
+export interface ApiAuth {
+  config: IapAuthConfig;
+  verifier: IapJwtVerifier;
+}
+
 export interface ApiRuntime {
   persistence: 'memory' | 'postgres';
   queries: CandidateQueryService;
   useCases: CandidateUseCases;
   eventBus: IEventBus;
+  auth?: ApiAuth;
+  staticRoot?: string;
+}
+
+function authFor(runtime: ApiRuntime): ApiAuth {
+  return (
+    runtime.auth ?? {
+      config: { enabled: false },
+      verifier: {
+        async verify() {
+          throw new Error('IAP は無効です。');
+        },
+      },
+    }
+  );
 }
 
 export function createApp(runtime: ApiRuntime) {
@@ -50,10 +72,17 @@ export function createApp(runtime: ApiRuntime) {
     return openapiYamlCache;
   };
 
-  return new Hono()
+  const app = new Hono()
+    .use('*', createIapAuthMiddleware(authFor(runtime)))
     .use('*', cors())
-    .get('/', (c) =>
-      c.json({
+    .get('/', (c) => {
+      if (runtime.staticRoot) {
+        const file = staticFileResponse(c, runtime.staticRoot, '/');
+        if (file) {
+          return file;
+        }
+      }
+      return c.json({
         name: 'candidate-interview-api',
         persistence: runtime.persistence,
         documentation: '/docs',
@@ -63,8 +92,8 @@ export function createApp(runtime: ApiRuntime) {
         applications: '/api/applications',
         events: '/api/events',
         eventStream: '/api/events/stream',
-      })
-    )
+      });
+    })
     .get('/openapi.yaml', (c) => {
       return c.text(getOpenapiYaml(), 200, {
         'content-type': 'application/yaml; charset=utf-8',
@@ -347,6 +376,21 @@ export function createApp(runtime: ApiRuntime) {
         }
       });
     });
+
+  if (runtime.staticRoot) {
+    const staticRoot = runtime.staticRoot;
+    app.notFound((c) => {
+      if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+        const file = staticFileResponse(c, staticRoot, c.req.path);
+        if (file) {
+          return file;
+        }
+      }
+      return c.json({ error: '見つかりません。' }, 404);
+    });
+  }
+
+  return app;
 }
 
 export type AppType = ReturnType<typeof createApp>;

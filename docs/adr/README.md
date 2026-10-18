@@ -16,3 +16,4 @@
 | [ADR-0008](./0008-schema-first-openapi-and-code-generation.md) | Schema-First (OpenAPI 3.1) アプローチと openapi-typescript による型自動生成 | 承認 (Accepted) | 2026-10-17 |
 | [ADR-0009](./0009-casual-interview-unified-as-session-entity.md) | カジュアル面談（Casual Interview）の選考セッションエンティティ統合モデリング方針 | 承認 (Accepted) | 2026-10-18 |
 | [ADR-0010](./0010-proposed-schedule-slots-and-cross-company-conflict-prevention.md) | 日程調整における候補日提示枠（Proposed Schedule Slots）の管理と複数社横断ブッキング防止方針 | 承認 (Accepted) | 2026-10-18 |
+| [ADR-0012](./0012-in-process-cqrs-transactional-outbox-and-sse-synchronization.md) | 単一コンテナ完結型 In-Process CQRS、Transactional Outbox、および SSE リアルタイム同期方針 | 承認 (Accepted) | 2026-10-18 |

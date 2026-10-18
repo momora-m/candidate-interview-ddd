@@ -79,6 +79,7 @@
 - [ADR-0008: Schema-First (OpenAPI 3.1) アプローチと openapi-typescript による型自動生成](docs/adr/0008-schema-first-openapi-and-code-generation.md)
 - [ADR-0009: カジュアル面談（Casual Interview）の選考セッションエンティティ統合モデリング方針](docs/adr/0009-casual-interview-unified-as-session-entity.md)
 - [ADR-0010: 日程調整における候補日提示枠（Proposed Schedule Slots）の管理と複数社横断ブッキング防止方針](docs/adr/0010-proposed-schedule-slots-and-cross-company-conflict-prevention.md)
+- [ADR-0012: 単一コンテナ完結型 In-Process CQRS、Transactional Outbox、および SSE リアルタイム同期方針](docs/adr/0012-in-process-cqrs-transactional-outbox-and-sse-synchronization.md)
 
 詳細は [docs/adr/README.md](docs/adr/README.md) を参照してください。
 
@@ -145,7 +146,7 @@ docker compose up -d postgres
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run db:migrate
 ```
 
-`npm run db:migrate` は `db/migrations/001_initial.sql` だけを適用します。サンプル行は `002_seed.sql` 側です。
+`npm run db:migrate` は `db/migrations/001_initial.sql` と `db/migrations/003_domain_events_and_read_models.sql` を適用します。サンプル行は `002_seed.sql` 側です。API 起動時にも同じスキーマを適用し、書き込みモデルから画面用リードモデルを組み直します。
 
 ### API サーバー (Hono)
 ```bash
@@ -157,7 +158,7 @@ npm run api
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run api
 ```
 
-待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。
+待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。画面向けの GET は集約を組み立てず、リードモデルの文書を 1 回の SELECT で返します。`GET /api/events/stream` はコミット後のドメインイベントを Server-Sent Events で流します。
 
 型だけ共有するクライアントの例:
 

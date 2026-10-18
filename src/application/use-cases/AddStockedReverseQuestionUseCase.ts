@@ -1,5 +1,4 @@
 import { ITargetCompanyRepository } from '@/domain/repositories/ITargetCompanyRepository';
-import { IEventBus } from '../events/IEventBus';
 import { CompanyId } from '@/domain/company/CompanyId';
 import {
   StockedReverseQuestion,
@@ -19,7 +18,6 @@ export interface AddStockedReverseQuestionCommand {
 export class AddStockedReverseQuestionUseCase {
   constructor(
     private readonly companyRepo: ITargetCompanyRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: AddStockedReverseQuestionCommand): Promise<Result<{ questionId: string }>> {
@@ -44,9 +42,6 @@ export class AddStockedReverseQuestionUseCase {
     if (addRes.isFailure()) return Result.fail(addRes.getError());
 
     await this.companyRepo.save(company);
-    await this.eventBus.publishAll(company.domainEvents);
-    company.clearEvents();
-
     return Result.ok({ questionId: question.id });
   }
 }

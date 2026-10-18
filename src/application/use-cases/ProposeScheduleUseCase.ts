@@ -4,7 +4,6 @@ import { SelectionStage, type StageCode } from '@/domain/application/SelectionSt
 import { TimeWindow } from '@/domain/interview/TimeWindow';
 import { CandidateScheduleConflictDomainService } from '@/domain/services/CandidateScheduleConflictDomainService';
 import { Result } from '@/domain/shared/Result';
-import { IEventBus } from '../events/IEventBus';
 import {
   conflictMessage,
   interviewFormatFromCommand,
@@ -23,7 +22,6 @@ export class ProposeScheduleUseCase {
 
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: ProposeScheduleCommand): Promise<Result<{ proposalId: string }>> {
@@ -78,9 +76,6 @@ export class ProposeScheduleUseCase {
     if (proposed.isFailure()) return Result.fail(proposed.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok({ proposalId: proposed.getValue().id.value });
   }
 }

@@ -1,5 +1,4 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
-import { IEventBus } from '../events/IEventBus';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { SelectionStage, StageCode } from '@/domain/application/SelectionStage';
 import { TimeWindow } from '@/domain/interview/TimeWindow';
@@ -24,7 +23,6 @@ export class ScheduleInterviewUseCase {
 
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: ScheduleInterviewCommand): Promise<Result<{ sessionId: string }>> {
@@ -74,9 +72,6 @@ export class ScheduleInterviewUseCase {
     if (scheduleRes.isFailure()) return Result.fail(scheduleRes.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok({ sessionId: scheduleRes.getValue().id.value });
   }
 }

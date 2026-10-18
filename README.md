@@ -120,7 +120,7 @@ npm run security:check
 ```bash
 npm test
 ```
-ドメイン・ユースケースに加え、PostgreSQL リポジトリの統合テストも実行します。テスト用データベースはプロセス内の PGlite なので、Docker や接続文字列は不要です。
+ドメイン・ユースケースに加え、PostgreSQL リポジトリの統合テストも実行します。テスト用データベースはプロセス内の PGlite なので、Docker や接続文字列は不要です。pull request と `main` への push では `.github/workflows/test.yml` が `npm run build` と `npm test` を実行します。GitHub の Public リポジトリではこの実行時間は無料です。
 
 ### PostgreSQL（任意）
 ローカルの PostgreSQL 16 を使う場合:

@@ -1,6 +1,10 @@
 # ==========================================
-# 1. 必要な Google Cloud API の有効化
+# 1. 必要な Google Cloud API の有効化 & プロジェクト情報取得
 # ==========================================
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
 locals {
   services = [
     "run.googleapis.com",
@@ -9,6 +13,9 @@ locals {
     "iap.googleapis.com",
     "artifactregistry.googleapis.com",
   ]
+
+  # IAP Audience が未指定の場合は Cloud Run Direct IAP の標準形式を自動計算
+  iap_audience = var.iap_audience != "" ? var.iap_audience : "/projects/${data.google_project.project.number}/locations/${var.region}/services/${var.app_name}"
 }
 
 resource "google_project_service" "apis" {
@@ -124,10 +131,13 @@ resource "google_secret_manager_secret_iam_member" "secret_accessor" {
 # 5. Cloud Run v2 サービス (ADR-0011 & ADR-0012)
 # ==========================================
 resource "google_cloud_run_v2_service" "default" {
-  name     = var.app_name
-  location = var.region
-  project  = var.project_id
-  ingress  = "INGRESS_TRAFFIC_ALL"
+  provider            = google-beta
+  name                = var.app_name
+  location            = var.region
+  project             = var.project_id
+  ingress             = "INGRESS_TRAFFIC_ALL"
+  deletion_protection = false
+  iap_enabled         = true
 
   template {
     service_account = google_service_account.cloud_run.email
@@ -172,11 +182,6 @@ resource "google_cloud_run_v2_service" "default" {
       }
 
       env {
-        name  = "PORT"
-        value = "8080"
-      }
-
-      env {
         name  = "INSTANCE_CONNECTION_NAME"
         value = google_sql_database_instance.default.connection_name
       }
@@ -209,7 +214,7 @@ resource "google_cloud_run_v2_service" "default" {
 
       env {
         name  = "IAP_AUDIENCE"
-        value = var.iap_audience
+        value = local.iap_audience
       }
 
       startup_probe {
@@ -245,17 +250,20 @@ resource "google_cloud_run_v2_service" "default" {
 # ==========================================
 # 6. IAP & 認証認可アクセス制御
 # ==========================================
-# Cloud IAP 経由でのアクセス権限を候補者自身（単一ユーザー）のみに付与
-resource "google_cloud_run_v2_service_iam_member" "iap_invoker" {
-  project  = var.project_id
+# IAP サービスアカウントに Cloud Run 起動権限を付与
+resource "google_cloud_run_v2_service_iam_member" "iap_service_agent_invoker" {
+  project  = google_cloud_run_v2_service.default.project
   location = google_cloud_run_v2_service.default.location
   name     = google_cloud_run_v2_service.default.name
   role     = "roles/run.invoker"
-  member   = "user:${var.allowed_user_email}"
+  member   = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-iap.iam.gserviceaccount.com"
 }
 
-resource "google_project_iam_member" "iap_accessor" {
-  project = var.project_id
-  role    = "roles/iap.httpsResourceAccessor"
-  member  = "user:${var.allowed_user_email}"
+# 候補者自身（単一ユーザー）に Cloud Run Direct IAP アクセス権限を付与
+resource "google_iap_web_cloud_run_service_iam_member" "user_iap_access" {
+  project                = var.project_id
+  location               = var.region
+  cloud_run_service_name = google_cloud_run_v2_service.default.name
+  role                   = "roles/iap.httpsResourceAccessor"
+  member                 = "user:${var.allowed_user_email}"
 }

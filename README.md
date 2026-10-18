@@ -77,6 +77,8 @@
 - [ADR-0006: RDB（PostgreSQL）永続化と子エンティティのトランザクション内全削除・一括再挿入方針](docs/adr/0006-rdb-persistence-with-transactional-full-replace-for-child-entities.md)
 - [ADR-0007: 外部非依存の純粋 TypeScript ドメイン層、Result 型エラーハンドリング、およびドメインイベントバス](docs/adr/0007-pure-typescript-domain-with-result-type-and-event-bus.md)
 - [ADR-0008: Schema-First (OpenAPI 3.1) アプローチと openapi-typescript による型自動生成](docs/adr/0008-schema-first-openapi-and-code-generation.md)
+- [ADR-0009: カジュアル面談（Casual Interview）の選考セッションエンティティ統合モデリング方針](docs/adr/0009-casual-interview-unified-as-session-entity.md)
+- [ADR-0010: 日程調整における候補日提示枠（Proposed Schedule Slots）の管理と複数社横断ブッキング防止方針](docs/adr/0010-proposed-schedule-slots-and-cross-company-conflict-prevention.md)
 
 詳細は [docs/adr/README.md](docs/adr/README.md) を参照してください。
 

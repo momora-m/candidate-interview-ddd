@@ -18,7 +18,7 @@ tags:
   - name: Applications
     description: 選考応募集約（JobApplication）および選考パイプライン管理
   - name: Interviews
-    description: 面接セッション（InterviewSession）、逆質問割当、および面接振り返り
+    description: 面接セッション（InterviewSession）、候補日の提示、逆質問割当、および面接振り返り
   - name: Todos
     description: 事前準備・事後フォローアップTODOタスク管理
   - name: Events
@@ -220,6 +220,198 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobApplication'
+        '404':
+          description: 応募が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/proposed-schedules:
+    post:
+      tags: [Interviews]
+      summary: 候補日を企業へ提示する
+      description: >
+        ポジションの選考ステージに対して、1〜5件の候補日時を返答待ちとして登録します。
+        確定済みの面接（カジュアル面談を含む）および他社へ提示中の候補日と、
+        時間または移動・準備バッファが重なる場合は 409 を返します。
+      operationId: proposeSchedule
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposeScheduleRequest'
+      responses:
+        '201':
+          description: 候補日を提示した
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposalId, application]
+                properties:
+                  proposalId:
+                    type: string
+                  application:
+                    $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 入力またはドメインルール違反
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 応募が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 確定面接または提示中の候補日と衝突した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/proposed-schedules/{proposalId}/confirm:
+    post:
+      tags: [Interviews]
+      summary: 提示した候補日の1枠を面接として確定する
+      description: >
+        企業が選んだ枠を InterviewSession に昇格します。選ばれなかった枠は返答待ちではなくなり、
+        他社の日程調整をブロックしなくなります。カジュアル面談も同じセッションになります。
+      operationId: confirmProposedSchedule
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmProposedScheduleRequest'
+      responses:
+        '200':
+          description: 面接として確定した
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId, application]
+                properties:
+                  sessionId:
+                    type: string
+                  application:
+                    $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 入力またはドメインルール違反
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 応募または日程調整が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 確定しようとした枠が他の予定と衝突した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/proposed-schedules/{proposalId}/cancel:
+    post:
+      tags: [Interviews]
+      summary: 提示中の候補日を取り下げる
+      operationId: cancelProposedSchedule
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 取り下げた応募
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 返答待ちではない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 応募または日程調整が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/casual-decision:
+    post:
+      tags: [Applications]
+      summary: カジュアル面談のあと、正式選考へ進むか見送る
+      description: >
+        カジュアル面談は通常の面接セッションですが、終了後の遷移は企業の合否ではなく候補者の判断です。
+        正式選考へ進むには、確定したカジュアル面談の振り返りが必要です。
+      operationId: decideAfterCasualInterview
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CasualDecisionRequest'
+      responses:
+        '200':
+          description: 判断を記録した
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nextStageName, application]
+                properties:
+                  nextStageName:
+                    type: string
+                  application:
+                    $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: カジュアル面談中ではない、または振り返りが未入力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: 応募が存在しない
           content:
@@ -1052,6 +1244,7 @@ components:
         - statusLabel
         - isTerminal
         - sessions
+        - proposedSchedules
         - todos
         - version
         - createdAt
@@ -1112,6 +1305,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InterviewSession'
+        proposedSchedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposedSchedule'
         todos:
           type: array
           items:
@@ -1219,17 +1416,138 @@ components:
           type: string
           minLength: 1
 
+    ProposedScheduleStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, CANCELLED, EXPIRED]
+
+    ProposedScheduleSlot:
+      type: object
+      required: [slotIndex, startTime, endTime, timeWindowJP]
+      properties:
+        slotIndex:
+          type: integer
+          minimum: 0
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        timeWindowJP:
+          type: string
+
+    ProposedSchedule:
+      type: object
+      required:
+        - id
+        - stageCode
+        - stageLabel
+        - statusCode
+        - statusLabel
+        - formatType
+        - formatSummary
+        - note
+        - slots
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        stageCode:
+          $ref: '#/components/schemas/StageCode'
+        stageLabel:
+          type: string
+        statusCode:
+          $ref: '#/components/schemas/ProposedScheduleStatus'
+        statusLabel:
+          type: string
+        formatType:
+          $ref: '#/components/schemas/FormatType'
+        formatSummary:
+          type: string
+        note:
+          type: string
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposedScheduleSlot'
+        confirmedSlotIndex:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProposeScheduleRequest:
+      type: object
+      required: [slots, formatType]
+      properties:
+        stageCode:
+          $ref: '#/components/schemas/StageCode'
+        note:
+          type: string
+        slots:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required: [startTime, endTime]
+            properties:
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+        formatType:
+          $ref: '#/components/schemas/FormatType'
+        meetingUrl:
+          type: string
+        meetingPasscode:
+          type: string
+        locationName:
+          type: string
+        roomName:
+          type: string
+        receptionInstructions:
+          type: string
+        estimatedTravelMinutes:
+          type: integer
+          minimum: 0
+
+    ConfirmProposedScheduleRequest:
+      type: object
+      required: [slotIndex]
+      properties:
+        slotIndex:
+          type: integer
+          minimum: 0
+
+    CasualDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [PROCEED, WITHDRAW]
+        reason:
+          type: string
+
     CreateApplicationRequest:
       type: object
       required:
         - companyId
-        - positionTitle
       properties:
         companyId:
           type: string
         positionTitle:
           type: string
           minLength: 1
+          description: 省略できるのはカジュアル面談の応募だけです。その場合は「ポジション未定」になります。
         jobDescriptionUrl:
           type: string
         salaryMin:

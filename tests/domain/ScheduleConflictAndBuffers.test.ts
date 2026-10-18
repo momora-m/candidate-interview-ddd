@@ -73,4 +73,45 @@ describe('CandidateScheduleConflictDomainService & Travel Buffers', () => {
     assert.equal(conflictRes.getError().isHardOverlap, false);
     assert.match(conflictRes.getError().overlapReason, /移動・準備バッファ/);
   });
+
+  test('blocks a candidate slot that overlaps another company pending proposal, including a casual interview', () => {
+    const casual = JobApplication.create({
+      companyId: CompanyId.create('comp_casual').getValue(),
+      positionDetails: PositionDetails.create({ title: 'ポジション未定' }).getValue(),
+      initialStageCode: 'CASUAL_INTERVIEW',
+    }).getValue();
+    const held = TimeWindow.create('2026-11-12T01:00:00.000Z', '2026-11-12T02:00:00.000Z').getValue();
+    const alternate = TimeWindow.create('2026-11-13T01:00:00.000Z', '2026-11-13T02:00:00.000Z').getValue();
+    const format = InterviewFormat.createOnline(
+      MeetingUrl.create('https://meet.google.com/casual').getValue()
+    ).getValue();
+    assert.ok(
+      casual.proposeSchedule({
+        slots: [held, alternate],
+        format,
+        note: 'カジュアル面談の候補',
+      }).isSuccess()
+    );
+
+    const other = JobApplication.create({
+      companyId: CompanyId.create('comp_other').getValue(),
+      positionDetails: PositionDetails.create({ title: 'Backend' }).getValue(),
+      initialStageCode: 'FIRST_TECHNICAL',
+    }).getValue();
+    const overlapping = TimeWindow.create('2026-11-12T01:30:00.000Z', '2026-11-12T02:30:00.000Z').getValue();
+    const conflict = service.checkConflicts(overlapping, format, [casual, other]);
+    assert.equal(conflict.isFailure(), true);
+    assert.equal(conflict.getError().occupancyKind, 'PENDING_PROPOSAL');
+    assert.equal(conflict.getError().isHardOverlap, true);
+
+    const confirmed = casual.confirmProposedSchedule(casual.proposedSchedules[0].id, 0);
+    assert.ok(confirmed.isSuccess());
+    assert.equal(confirmed.getValue().stage.code, 'CASUAL_INTERVIEW');
+    const released = service.checkConflicts(overlapping, format, [casual]);
+    assert.equal(released.isFailure(), true);
+    assert.equal(released.getError().occupancyKind, 'CONFIRMED_SESSION');
+
+    const freedAlternate = service.checkConflicts(alternate, format, [casual], undefined, casual.proposedSchedules[0].id);
+    assert.equal(freedAlternate.isSuccess(), true);
+  });
 });

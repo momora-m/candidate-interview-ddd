@@ -42,6 +42,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
     toggleTodoStatus,
     recordQuestionAnswer,
     advanceStage,
+    decideAfterCasualInterview,
     acceptOffer,
     rejectOrWithdraw,
   } = useApp();
@@ -81,6 +82,14 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
     const res = await advanceStage(appId);
     if (!res.success) {
       setActionError(res.error || '次ステージへの移行に失敗しました。');
+    }
+  };
+
+  const handleCasualDecision = async (appId: string, decision: 'PROCEED' | 'WITHDRAW') => {
+    setActionError(null);
+    const res = await decideAfterCasualInterview(appId, decision);
+    if (!res.success) {
+      setActionError(res.error || 'カジュアル面談後の判断に失敗しました。');
     }
   };
 
@@ -238,13 +247,31 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                         <span>面接日程を確定</span>
                       </button>
 
-                      <button
-                        onClick={() => handleAdvanceStage(selectedApp.id)}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>次ステージへ昇格 (Advance)</span>
-                      </button>
+                      {selectedApp.currentStageCode === 'CASUAL_INTERVIEW' ? (
+                        <>
+                          <button
+                            onClick={() => handleCasualDecision(selectedApp.id, 'PROCEED')}
+                            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>正式選考へ進む</span>
+                          </button>
+                          <button
+                            onClick={() => handleCasualDecision(selectedApp.id, 'WITHDRAW')}
+                            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all"
+                          >
+                            <span>見送る</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleAdvanceStage(selectedApp.id)}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>次ステージへ昇格 (Advance)</span>
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

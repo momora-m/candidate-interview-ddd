@@ -48,7 +48,7 @@ export const addQuestionSchema = z.object({
 
 export const createApplicationSchema = z.object({
   companyId: z.string().min(1),
-  positionTitle: z.string().min(1),
+  positionTitle: z.string().min(1).optional(),
   jobDescriptionUrl: z.string().optional(),
   salaryMin: z.number().int().nonnegative().optional(),
   salaryMax: z.number().int().nonnegative().optional(),
@@ -72,6 +72,36 @@ export const scheduleInterviewSchema = z.object({
   receptionInstructions: z.string().optional(),
   estimatedTravelMinutes: z.number().int().nonnegative().optional(),
   interviewerNames: z.array(z.string()).optional(),
+});
+
+export const proposeScheduleSchema = z.object({
+  stageCode: stageCodeSchema.optional(),
+  note: z.string().optional(),
+  slots: z
+    .array(
+      z.object({
+        startTime: z.string().min(1),
+        endTime: z.string().min(1),
+      })
+    )
+    .min(1)
+    .max(5),
+  formatType: z.enum(['ONLINE', 'IN_PERSON']),
+  meetingUrl: z.string().optional(),
+  meetingPasscode: z.string().optional(),
+  locationName: z.string().optional(),
+  roomName: z.string().optional(),
+  receptionInstructions: z.string().optional(),
+  estimatedTravelMinutes: z.number().int().nonnegative().optional(),
+});
+
+export const confirmProposedScheduleSchema = z.object({
+  slotIndex: z.number().int().nonnegative(),
+});
+
+export const casualDecisionSchema = z.object({
+  decision: z.enum(['PROCEED', 'WITHDRAW']),
+  reason: z.string().optional(),
 });
 
 export const rescheduleInterviewSchema = z.object({

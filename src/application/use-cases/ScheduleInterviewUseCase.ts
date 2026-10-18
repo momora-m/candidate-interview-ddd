@@ -3,23 +3,19 @@ import { IEventBus } from '../events/IEventBus';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { SelectionStage, StageCode } from '@/domain/application/SelectionStage';
 import { TimeWindow } from '@/domain/interview/TimeWindow';
-import { InterviewFormat } from '@/domain/interview/InterviewFormat';
-import { MeetingUrl } from '@/domain/interview/MeetingUrl';
 import { CandidateScheduleConflictDomainService } from '@/domain/services/CandidateScheduleConflictDomainService';
 import { Result } from '@/domain/shared/Result';
+import {
+  conflictMessage,
+  interviewFormatFromCommand,
+  type InterviewFormatCommand,
+} from '../interviewFormatFromCommand';
 
-export interface ScheduleInterviewCommand {
+export interface ScheduleInterviewCommand extends InterviewFormatCommand {
   applicationId: string;
   stageCode?: StageCode;
   startTime: string | Date;
   endTime: string | Date;
-  formatType: 'ONLINE' | 'IN_PERSON';
-  meetingUrl?: string;
-  meetingPasscode?: string;
-  locationName?: string;
-  roomName?: string;
-  receptionInstructions?: string;
-  estimatedTravelMinutes?: number;
   interviewerNames?: string[];
 }
 
@@ -44,29 +40,21 @@ export class ScheduleInterviewUseCase {
     if (timeWindowRes.isFailure()) return Result.fail(timeWindowRes.getError());
     const timeWindow = timeWindowRes.getValue();
 
-    let formatRes: Result<InterviewFormat>;
-    if (command.formatType === 'ONLINE') {
-      const urlRes = MeetingUrl.create(command.meetingUrl || 'https://zoom.us/j/100000000');
-      if (urlRes.isFailure()) return Result.fail(urlRes.getError());
-      formatRes = InterviewFormat.createOnline(urlRes.getValue(), command.meetingPasscode);
-    } else {
-      formatRes = InterviewFormat.createInPerson(
-        command.locationName || '東京本社オフィス',
-        command.roomName || '会議室A',
-        command.receptionInstructions,
-        command.estimatedTravelMinutes ?? 45
-      );
-    }
+    const formatRes = interviewFormatFromCommand(command);
     if (formatRes.isFailure()) return Result.fail(formatRes.getError());
     const format = formatRes.getValue();
 
-    // Check Schedule Conflicts & Travel Buffers across all applications
     const allApps = await this.applicationRepo.findAll();
     const conflictRes = this.conflictService.checkConflicts(timeWindow, format, allApps);
     if (conflictRes.isFailure()) {
       const err = conflictRes.getError();
       return Result.fail(
-        `【面接日程重複エラー】${err.overlapReason} (${err.conflictingStageName} / ${err.conflictingTimeWindowJP})`
+        conflictMessage(
+          '【面接日程重複エラー】',
+          err.overlapReason,
+          err.conflictingStageName,
+          err.conflictingTimeWindowJP
+        )
       );
     }
 

@@ -98,9 +98,10 @@ describe('Application Layer Use Cases & Workflows', () => {
     });
     assert.ok(refRes.isSuccess());
 
-    // 6. Advance Stage to FIRST_TECHNICAL
-    const advRes = await app.advanceSelectionStage.execute({
+    // 6. The candidate, not the company, decides to enter formal selection.
+    const advRes = await app.decideAfterCasualInterview.execute({
       applicationId: createdApp.id.value,
+      decision: 'PROCEED',
     });
     assert.ok(advRes.isSuccess());
     assert.equal(advRes.getValue().nextStageName, '一次技術面接 / スキル評価');
@@ -113,6 +114,7 @@ describe('Application Layer Use Cases & Workflows', () => {
     assert.ok(eventTypes.includes('REVERSE_QUESTION_ANSWER_RECORDED'));
     assert.ok(eventTypes.includes('INTERVIEW_REFLECTION_RECORDED'));
     assert.ok(eventTypes.includes('SELECTION_STAGE_ADVANCED'));
+    assert.ok(eventTypes.includes('CASUAL_INTERVIEW_DECISION_MADE'));
   });
 
   test('toggles todo status and adds custom todo', async () => {

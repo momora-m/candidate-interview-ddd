@@ -6,6 +6,7 @@ import type {
   InterviewSessionDTO,
   JobApplicationDTO,
   PreparationTodoDTO,
+  ProposedScheduleDTO,
   TargetCompanyDTO,
 } from '@/application/dtos/CandidateApplicationDTOs';
 
@@ -84,6 +85,26 @@ export function toApplicationDTO(
     updatedAt: session.updatedAt.toISOString(),
   }));
 
+  const proposedSchedules: ProposedScheduleDTO[] = application.proposedSchedules.map((proposal) => ({
+    id: proposal.id.value,
+    stageCode: proposal.stage.code,
+    stageLabel: proposal.stage.label,
+    statusCode: proposal.status.code,
+    statusLabel: proposal.status.label,
+    formatType: proposal.format.type,
+    formatSummary: proposal.format.getDisplaySummary(),
+    note: proposal.note,
+    slots: proposal.slots.map((slot, index) => ({
+      slotIndex: index,
+      startTime: slot.start.toISOString(),
+      endTime: slot.end.toISOString(),
+      timeWindowJP: slot.formatJP(),
+    })),
+    confirmedSlotIndex: proposal.confirmedSlotIndex,
+    createdAt: proposal.createdAt.toISOString(),
+    updatedAt: proposal.updatedAt.toISOString(),
+  }));
+
   const todos: PreparationTodoDTO[] = application.todos.map((todo) => ({
     id: todo.id.value,
     applicationId: todo.applicationId.value,
@@ -122,6 +143,7 @@ export function toApplicationDTO(
     statusLabel: application.status.label,
     isTerminal: application.status.isTerminal,
     sessions,
+    proposedSchedules,
     todos,
     version: application.version,
     createdAt: application.createdAt.toISOString(),

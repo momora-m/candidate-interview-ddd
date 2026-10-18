@@ -15,6 +15,9 @@ import { InterviewFormat } from '@/domain/interview/InterviewFormat';
 import { InterviewReflection, type PerformanceRating } from '@/domain/interview/InterviewReflection';
 import { InterviewSession } from '@/domain/interview/InterviewSession';
 import { InterviewSessionId } from '@/domain/interview/InterviewSessionId';
+import { ProposedSchedule } from '@/domain/interview/ProposedSchedule';
+import { ProposedScheduleId } from '@/domain/interview/ProposedScheduleId';
+import { ProposedScheduleStatus, type ProposedScheduleStatusCode } from '@/domain/interview/ProposedScheduleStatus';
 import { MeetingUrl } from '@/domain/interview/MeetingUrl';
 import { TimeWindow } from '@/domain/interview/TimeWindow';
 import { PreparationTodo } from '@/domain/todo/PreparationTodo';
@@ -92,6 +95,34 @@ export interface AssignedQuestionRow {
   obtained_answer: string | null;
   insight_rating: number | string | null;
   sort_order: number | string;
+}
+
+export interface ProposedScheduleRow {
+  id: string;
+  application_id: string;
+  stage_code: string;
+  status: string;
+  format_type: string;
+  meeting_url: string | null;
+  meeting_platform: string | null;
+  meeting_passcode: string | null;
+  meeting_notes: string | null;
+  location_name: string | null;
+  room_name: string | null;
+  reception_instructions: string | null;
+  estimated_travel_minutes: number | string | null;
+  note: string;
+  confirmed_slot_index: number | string | null;
+  sort_order: number | string;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface ProposedScheduleSlotRow {
+  proposed_schedule_id: string;
+  slot_index: number | string;
+  starts_at: Date | string;
+  ends_at: Date | string;
 }
 
 export interface PreparationTodoRow {
@@ -189,6 +220,39 @@ export function assignedQuestionToRow(
   ];
 }
 
+export function proposedScheduleToRow(
+  applicationId: string,
+  proposal: ProposedSchedule,
+  sortOrder: number
+): unknown[] {
+  const online = proposal.format.onlineDetails;
+  const inPerson = proposal.format.inPersonDetails;
+  return [
+    proposal.id.value,
+    applicationId,
+    proposal.stage.code,
+    proposal.status.code,
+    proposal.format.type,
+    online?.meetingUrl.url ?? null,
+    online?.meetingUrl.platform ?? null,
+    online?.meetingPasscode ?? null,
+    online?.notes ?? null,
+    inPerson?.locationName ?? null,
+    inPerson?.roomName ?? null,
+    inPerson?.receptionInstructions ?? null,
+    inPerson?.estimatedTravelMinutes ?? null,
+    proposal.note,
+    proposal.confirmedSlotIndex ?? null,
+    sortOrder,
+    proposal.createdAt,
+    proposal.updatedAt,
+  ];
+}
+
+export function proposedSlotToRow(proposalId: string, slot: TimeWindow, slotIndex: number): unknown[] {
+  return [proposalId, slotIndex, slot.start, slot.end];
+}
+
 export function preparationTodoToRow(todo: PreparationTodo, sortOrder: number): unknown[] {
   return [
     todo.id.value,
@@ -210,7 +274,9 @@ export function toJobApplication(
   row: JobApplicationRow,
   sessions: readonly InterviewSessionRow[],
   questions: readonly AssignedQuestionRow[],
-  todos: readonly PreparationTodoRow[]
+  todos: readonly PreparationTodoRow[],
+  proposals: readonly ProposedScheduleRow[] = [],
+  proposalSlots: readonly ProposedScheduleSlotRow[] = []
 ): JobApplication {
   const context = `JobApplication(${row.id})`;
   const questionsBySession = new Map<string, AssignedQuestionRow[]>();
@@ -266,6 +332,12 @@ export function toJobApplication(
     sessions: sessions.map((session) =>
       toInterviewSession(session, questionsBySession.get(session.id) ?? [])
     ),
+    proposedSchedules: proposals.map((proposal) =>
+      toProposedSchedule(
+        proposal,
+        proposalSlots.filter((slot) => slot.proposed_schedule_id === proposal.id)
+      )
+    ),
     todos: todos.map((todo) => toPreparationTodo(todo)),
     version: asNumber(row.version, `${context}.version`),
     createdAt: asDate(row.created_at, `${context}.createdAt`),
@@ -296,7 +368,19 @@ function toInterviewSession(
   });
 }
 
-function toInterviewFormat(row: InterviewSessionRow, context: string): InterviewFormat {
+function toInterviewFormat(
+  row: {
+    format_type: string;
+    meeting_url: string | null;
+    meeting_passcode: string | null;
+    meeting_notes: string | null;
+    location_name: string | null;
+    room_name: string | null;
+    reception_instructions: string | null;
+    estimated_travel_minutes: number | string | null;
+  },
+  context: string
+): InterviewFormat {
   if (row.format_type === 'ONLINE') {
     if (!row.meeting_url) {
       throw new PersistenceError(`${context}: オンライン面接の meeting_url が空です。`);
@@ -370,6 +454,38 @@ function toAssignedQuestion(row: AssignedQuestionRow, context: string): Assigned
     }),
     `${context} の AssignedReverseQuestion(${row.id})`
   );
+}
+
+function toProposedSchedule(
+  row: ProposedScheduleRow,
+  slots: readonly ProposedScheduleSlotRow[]
+): ProposedSchedule {
+  const context = `ProposedSchedule(${row.id})`;
+  const orderedSlots = [...slots].sort(
+    (left, right) => asNumber(left.slot_index, `${context}.slotIndex`) - asNumber(right.slot_index, `${context}.slotIndex`)
+  );
+  return ProposedSchedule.hydrate({
+    id: unwrap(ProposedScheduleId.create(row.id), `${context} の ProposedScheduleId`),
+    stage: unwrap(SelectionStage.create(row.stage_code as StageCode), `${context} の SelectionStage`),
+    slots: orderedSlots.map((slot) =>
+      unwrap(
+        TimeWindow.create(
+          asDate(slot.starts_at, `${context}.startsAt`),
+          asDate(slot.ends_at, `${context}.endsAt`)
+        ),
+        `${context} の TimeWindow`
+      )
+    ),
+    format: toInterviewFormat(row, context),
+    status: unwrap(
+      ProposedScheduleStatus.create(row.status as ProposedScheduleStatusCode),
+      `${context} の ProposedScheduleStatus`
+    ),
+    note: row.note,
+    confirmedSlotIndex: asOptionalNumber(row.confirmed_slot_index),
+    createdAt: asDate(row.created_at, `${context}.createdAt`),
+    updatedAt: asDate(row.updated_at, `${context}.updatedAt`),
+  });
 }
 
 function toPreparationTodo(row: PreparationTodoRow): PreparationTodo {

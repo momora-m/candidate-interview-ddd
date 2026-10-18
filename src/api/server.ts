@@ -1,11 +1,8 @@
 import { serve } from '@hono/node-server';
-import { createCandidateUseCases } from '@/application/createCandidateUseCases';
-import { CandidateQueryService } from '@/application/queries/CandidateQueryService';
-import { InMemoryEventBus } from '@/infrastructure/event-bus/InMemoryEventBus';
-import { createPostgresPersistence } from '@/infrastructure/persistence/createPostgresPersistence';
-import { InMemoryJobApplicationRepository } from '@/infrastructure/repositories/InMemoryJobApplicationRepository';
-import { InMemoryTargetCompanyRepository } from '@/infrastructure/repositories/InMemoryTargetCompanyRepository';
-import { seedCandidateData } from '@/infrastructure/seeds/SeedCandidateData';
+import {
+  createInMemoryCandidateRuntime,
+  createPostgresCandidateRuntime,
+} from '@/infrastructure/createCandidateRuntime';
 import { createApp, type ApiRuntime } from './app';
 
 const port = Number(process.env.PORT ?? 4317);
@@ -40,37 +37,19 @@ async function openRuntime(connectionString: string | undefined): Promise<{
   api: ApiRuntime;
   close: () => Promise<void>;
 }> {
-  const eventBus = new InMemoryEventBus();
-
-  if (connectionString) {
-    const persistence = await createPostgresPersistence(connectionString);
-    return {
-      api: {
-        persistence: 'postgres',
-        queries: new CandidateQueryService(
-          persistence.companyRepository,
-          persistence.applicationRepository,
-          eventBus
-        ),
-        useCases: createCandidateUseCases(
-          persistence.companyRepository,
-          persistence.applicationRepository,
-          eventBus
-        ),
-      },
-      close: () => persistence.db.close(),
-    };
+  const candidate = connectionString
+    ? await createPostgresCandidateRuntime(connectionString)
+    : createInMemoryCandidateRuntime();
+  if (!connectionString) {
+    await candidate.prepare();
   }
-
-  const companyRepo = new InMemoryTargetCompanyRepository();
-  const applicationRepo = new InMemoryJobApplicationRepository();
-  await seedCandidateData(companyRepo, applicationRepo, eventBus);
   return {
     api: {
-      persistence: 'memory',
-      queries: new CandidateQueryService(companyRepo, applicationRepo, eventBus),
-      useCases: createCandidateUseCases(companyRepo, applicationRepo, eventBus),
+      persistence: candidate.persistence,
+      queries: candidate.queries,
+      useCases: candidate.useCases,
+      eventBus: candidate.eventBus,
     },
-    close: async () => {},
+    close: () => candidate.close(),
   };
 }

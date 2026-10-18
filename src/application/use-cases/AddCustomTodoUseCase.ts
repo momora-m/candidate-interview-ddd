@@ -1,5 +1,4 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
-import { IEventBus } from '../events/IEventBus';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { InterviewSessionId } from '@/domain/interview/InterviewSessionId';
 import { TaskPriority, PriorityLevel } from '@/domain/todo/TaskPriority';
@@ -17,7 +16,6 @@ export interface AddCustomTodoCommand {
 export class AddCustomTodoUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: AddCustomTodoCommand): Promise<Result<{ todoId: string }>> {
@@ -53,9 +51,6 @@ export class AddCustomTodoUseCase {
     if (todoRes.isFailure()) return Result.fail(todoRes.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok({ todoId: todoRes.getValue().id.value });
   }
 }

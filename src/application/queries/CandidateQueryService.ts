@@ -1,68 +1,34 @@
-import type { IEventBus } from '@/application/events/IEventBus';
 import type {
   DomainEventDTO,
   JobApplicationDTO,
   TargetCompanyDTO,
 } from '@/application/dtos/CandidateApplicationDTOs';
-import {
-  toApplicationDTO,
-  toCompanyDTO,
-  toEventDTO,
-} from '@/application/read-model/candidateReadModel';
-import { ApplicationId } from '@/domain/application/ApplicationId';
-import { CompanyId } from '@/domain/company/CompanyId';
-import type { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
-import type { ITargetCompanyRepository } from '@/domain/repositories/ITargetCompanyRepository';
+import type { CandidateReadModel } from '@/application/read-model/screenReadModel';
 
+/**
+ * Reads screen DTOs from the projected read model (ADR-0012).
+ * A company or application lookup is one document read, not an aggregate rebuild.
+ */
 export class CandidateQueryService {
-  public constructor(
-    private readonly companies: ITargetCompanyRepository,
-    private readonly applications: IJobApplicationRepository,
-    private readonly events: IEventBus
-  ) {}
+  public constructor(private readonly readModel: CandidateReadModel) {}
 
-  public async listCompanies(): Promise<TargetCompanyDTO[]> {
-    const companies = await this.companies.findAll();
-    return companies.map(toCompanyDTO);
+  public listCompanies(): Promise<TargetCompanyDTO[]> {
+    return this.readModel.listCompanies();
   }
 
-  public async getCompany(id: string): Promise<TargetCompanyDTO | null> {
-    const companyId = CompanyId.create(id);
-    if (companyId.isFailure()) {
-      return null;
-    }
-    const company = await this.companies.findById(companyId.getValue());
-    return company ? toCompanyDTO(company) : null;
+  public getCompany(id: string): Promise<TargetCompanyDTO | null> {
+    return this.readModel.getCompany(id);
   }
 
-  public async listApplications(): Promise<JobApplicationDTO[]> {
-    return this.mapApplications(await this.applications.findAll());
+  public listApplications(): Promise<JobApplicationDTO[]> {
+    return this.readModel.listApplications();
   }
 
-  public async getApplication(id: string): Promise<JobApplicationDTO | null> {
-    const applicationId = ApplicationId.create(id);
-    if (applicationId.isFailure()) {
-      return null;
-    }
-    const application = await this.applications.findById(applicationId.getValue());
-    if (!application) {
-      return null;
-    }
-    const [dto] = await this.mapApplications([application]);
-    return dto ?? null;
+  public getApplication(id: string): Promise<JobApplicationDTO | null> {
+    return this.readModel.getApplication(id);
   }
 
-  public listEvents(): DomainEventDTO[] {
-    return this.events.getHistory().map(toEventDTO);
-  }
-
-  private async mapApplications(
-    applications: Awaited<ReturnType<IJobApplicationRepository['findAll']>>
-  ): Promise<JobApplicationDTO[]> {
-    const companies = await this.companies.findAll();
-    const names = new Map(companies.map((company) => [company.id.value, company.name]));
-    return applications.map((application) =>
-      toApplicationDTO(application, names.get(application.companyId.value))
-    );
+  public listEvents(): Promise<DomainEventDTO[]> {
+    return this.readModel.listEvents();
   }
 }

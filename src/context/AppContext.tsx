@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { apiRequest } from '@/api/client';
 import {
@@ -21,6 +21,7 @@ interface AppContextType {
   companies: TargetCompanyDTO[];
   applications: JobApplicationDTO[];
   events: DomainEventDTO[];
+  eventsLive: boolean;
   loading: boolean;
   loadError: string | null;
   refresh: () => Promise<DomainEventDTO[]>;
@@ -59,28 +60,22 @@ function failure(err: unknown): { success: false; error: string } {
   return { success: false, error: err instanceof Error ? err.message : String(err) };
 }
 
-function celebrate(previous: DomainEventDTO[], next: DomainEventDTO[]) {
-  const seen = new Set(previous.map((event) => event.eventId));
-  const notable = next.some(
-    (event) =>
-      !seen.has(event.eventId) &&
-      (event.eventType === 'SELECTION_STAGE_ADVANCED' ||
-        event.eventType === 'JOB_APPLICATION_OFFER_ACCEPTED')
+function isNotable(event: DomainEventDTO): boolean {
+  return (
+    event.eventType === 'SELECTION_STAGE_ADVANCED' ||
+    event.eventType === 'JOB_APPLICATION_OFFER_ACCEPTED'
   );
-  if (!notable) return;
-  confetti({
-    particleCount: 80,
-    spread: 70,
-    origin: { y: 0.6 },
-  });
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [companies, setCompanies] = useState<TargetCompanyDTO[]>([]);
   const [applications, setApplications] = useState<JobApplicationDTO[]>([]);
   const [events, setEvents] = useState<DomainEventDTO[]>([]);
+  const [eventsLive, setEventsLive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const seenEventIds = useRef(new Set<string>());
+  const hasLoadedOnce = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -89,6 +84,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         apiRequest<JobApplicationDTO[]>('/api/applications'),
         apiRequest<DomainEventDTO[]>('/api/events'),
       ]);
+      const unseen = eventData.filter((event) => !seenEventIds.current.has(event.eventId));
+      for (const event of eventData) {
+        seenEventIds.current.add(event.eventId);
+      }
+      if (hasLoadedOnce.current && unseen.some(isNotable)) {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+        });
+      }
+      hasLoadedOnce.current = true;
       setCompanies(companyData);
       setApplications(applicationData);
       setEvents(eventData);
@@ -106,6 +113,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refresh().catch(() => {
       // loadError already holds the message shown in the shell.
     });
+  }, [refresh]);
+
+  useEffect(() => {
+    const source = new EventSource('/api/events/stream');
+    const onDomainEvent = () => {
+      refresh().catch(() => {
+        // The shell already shows loadError when the follow-up read fails.
+      });
+    };
+    source.addEventListener('domain-event', onDomainEvent);
+    source.onopen = () => setEventsLive(true);
+    source.onerror = () => setEventsLive(false);
+    return () => {
+      source.removeEventListener('domain-event', onDomainEvent);
+      source.close();
+    };
   }, [refresh]);
 
   const scheduleInterview = async (cmd: ScheduleInterviewCommand) => {
@@ -181,8 +204,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           body: JSON.stringify({ decision }),
         }
       );
-      const nextEvents = await refresh();
-      celebrate(events, nextEvents);
+      await refresh();
       return { success: true, nextStageName: body.nextStageName };
     } catch (err) {
       return failure(err);
@@ -293,8 +315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `/api/applications/${encodeURIComponent(appId)}/advance`,
         { method: 'POST' }
       );
-      const nextEvents = await refresh();
-      celebrate(events, nextEvents);
+      await refresh();
       return { success: true, nextStageName: body.nextStageName };
     } catch (err) {
       return failure(err);
@@ -307,8 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         method: 'POST',
         body: JSON.stringify({ action: 'ACCEPT_OFFER' }),
       });
-      const nextEvents = await refresh();
-      celebrate(events, nextEvents);
+      await refresh();
       return { success: true };
     } catch (err) {
       return failure(err);
@@ -378,6 +398,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         companies,
         applications,
         events,
+        eventsLive,
         loading,
         loadError,
         refresh,

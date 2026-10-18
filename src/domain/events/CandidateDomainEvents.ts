@@ -208,6 +208,52 @@ export class CasualInterviewDecisionMadeEvent extends BaseDomainEvent {
   }
 }
 
+export class JobApplicationOpenedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly companyId: string,
+    public readonly positionTitle: string,
+    public readonly stageCode: string
+  ) {
+    super(aggregateId, 'JOB_APPLICATION_OPENED', {
+      companyId,
+      positionTitle,
+      stageCode,
+    });
+  }
+}
+
+export class TargetCompanyRegisteredEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly name: string
+  ) {
+    super(aggregateId, 'TARGET_COMPANY_REGISTERED', { name });
+  }
+}
+
+export class StockedReverseQuestionAddedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly questionId: string,
+    public readonly questionText: string
+  ) {
+    super(aggregateId, 'STOCKED_REVERSE_QUESTION_ADDED', {
+      questionId,
+      questionText,
+    });
+  }
+}
+
+export class StockedReverseQuestionRemovedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly questionId: string
+  ) {
+    super(aggregateId, 'STOCKED_REVERSE_QUESTION_REMOVED', { questionId });
+  }
+}
+
 export class JobApplicationOfferAcceptedEvent extends BaseDomainEvent {
   constructor(
     aggregateId: string,

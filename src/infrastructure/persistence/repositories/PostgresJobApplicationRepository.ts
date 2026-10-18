@@ -19,6 +19,7 @@ import {
   type ProposedScheduleRow,
   type ProposedScheduleSlotRow,
 } from '../mappers/JobApplicationMapper';
+import { appendDomainEvents } from '../outbox/domainEvents';
 import { groupBy, insertRows, isForeignKeyViolation } from '../sql';
 
 const APPLICATION_COLUMNS = [
@@ -131,6 +132,9 @@ const TODO_COLUMNS = [
  * belongs to the aggregate, then inserts the in-memory children again.
  * Last write wins. The candidate is a single actor, so lost updates from
  * concurrent writers are outside the domain.
+ *
+ * ADR-0012: domain events raised by the aggregate are inserted in the same
+ * transaction. The caller publishes them only after commit.
  */
 export class PostgresJobApplicationRepository implements IJobApplicationRepository {
   public constructor(private readonly db: SqlClient) {}
@@ -165,6 +169,7 @@ export class PostgresJobApplicationRepository implements IJobApplicationReposito
           params
         );
 
+        await appendDomainEvents(tx, 'JobApplication', application.domainEvents);
         await replaceChildren(tx, application);
       });
     } catch (error) {

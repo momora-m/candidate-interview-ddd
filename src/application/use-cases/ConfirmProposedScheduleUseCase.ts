@@ -3,7 +3,6 @@ import { ApplicationId } from '@/domain/application/ApplicationId';
 import { ProposedScheduleId } from '@/domain/interview/ProposedScheduleId';
 import { CandidateScheduleConflictDomainService } from '@/domain/services/CandidateScheduleConflictDomainService';
 import { Result } from '@/domain/shared/Result';
-import { IEventBus } from '../events/IEventBus';
 import { conflictMessage } from '../interviewFormatFromCommand';
 
 export interface ConfirmProposedScheduleCommand {
@@ -17,7 +16,6 @@ export class ConfirmProposedScheduleUseCase {
 
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(
@@ -66,9 +64,6 @@ export class ConfirmProposedScheduleUseCase {
     if (confirmed.isFailure()) return Result.fail(confirmed.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok({ sessionId: confirmed.getValue().id.value });
   }
 }

@@ -4,6 +4,7 @@ import { QuestionCategory, TargetInterviewerRole } from '@/domain/company/Stocke
 import { StageCode } from '@/domain/application/SelectionStage';
 import { ApplicationStatusCode } from '@/domain/application/ApplicationStatus';
 import { FormatType } from '@/domain/interview/InterviewFormat';
+import { ProposedScheduleStatusCode } from '@/domain/interview/ProposedScheduleStatus';
 import { InsightRating } from '@/domain/interview/AssignedReverseQuestion';
 import { PerformanceRating } from '@/domain/interview/InterviewReflection';
 import { TaskTypeCode } from '@/domain/todo/TaskType';
@@ -84,6 +85,28 @@ export interface InterviewSessionDTO {
   updatedAt: string;
 }
 
+export interface ProposedScheduleSlotDTO {
+  slotIndex: number;
+  startTime: string;
+  endTime: string;
+  timeWindowJP: string;
+}
+
+export interface ProposedScheduleDTO {
+  id: string;
+  stageCode: StageCode;
+  stageLabel: string;
+  statusCode: ProposedScheduleStatusCode;
+  statusLabel: string;
+  formatType: FormatType;
+  formatSummary: string;
+  note: string;
+  slots: ProposedScheduleSlotDTO[];
+  confirmedSlotIndex?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PreparationTodoDTO {
   id: string;
   applicationId: string;
@@ -122,6 +145,7 @@ export interface JobApplicationDTO {
   statusLabel: string;
   isTerminal: boolean;
   sessions: InterviewSessionDTO[];
+  proposedSchedules: ProposedScheduleDTO[];
   todos: PreparationTodoDTO[];
   version: number;
   createdAt: string;

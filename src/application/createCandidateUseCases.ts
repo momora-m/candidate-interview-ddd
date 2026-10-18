@@ -3,7 +3,11 @@ import { AddCustomTodoUseCase } from '@/application/use-cases/AddCustomTodoUseCa
 import { AddStockedReverseQuestionUseCase } from '@/application/use-cases/AddStockedReverseQuestionUseCase';
 import { AdvanceSelectionStageUseCase } from '@/application/use-cases/AdvanceSelectionStageUseCase';
 import { AssignReverseQuestionUseCase } from '@/application/use-cases/AssignReverseQuestionUseCase';
+import { CancelProposedScheduleUseCase } from '@/application/use-cases/CancelProposedScheduleUseCase';
+import { ConfirmProposedScheduleUseCase } from '@/application/use-cases/ConfirmProposedScheduleUseCase';
 import { CreateJobApplicationUseCase } from '@/application/use-cases/CreateJobApplicationUseCase';
+import { DecideAfterCasualInterviewUseCase } from '@/application/use-cases/DecideAfterCasualInterviewUseCase';
+import { ProposeScheduleUseCase } from '@/application/use-cases/ProposeScheduleUseCase';
 import { CreateTargetCompanyUseCase } from '@/application/use-cases/CreateTargetCompanyUseCase';
 import { RecordInterviewReflectionUseCase } from '@/application/use-cases/RecordInterviewReflectionUseCase';
 import { RecordQuestionAnswerUseCase } from '@/application/use-cases/RecordQuestionAnswerUseCase';
@@ -19,6 +23,10 @@ export interface CandidateUseCases {
   addStockedReverseQuestion: AddStockedReverseQuestionUseCase;
   createJobApplication: CreateJobApplicationUseCase;
   scheduleInterview: ScheduleInterviewUseCase;
+  proposeSchedule: ProposeScheduleUseCase;
+  confirmProposedSchedule: ConfirmProposedScheduleUseCase;
+  cancelProposedSchedule: CancelProposedScheduleUseCase;
+  decideAfterCasualInterview: DecideAfterCasualInterviewUseCase;
   rescheduleInterview: RescheduleInterviewUseCase;
   assignReverseQuestion: AssignReverseQuestionUseCase;
   recordQuestionAnswer: RecordQuestionAnswerUseCase;
@@ -39,6 +47,10 @@ export function createCandidateUseCases(
     addStockedReverseQuestion: new AddStockedReverseQuestionUseCase(companyRepo, eventBus),
     createJobApplication: new CreateJobApplicationUseCase(applicationRepo, companyRepo, eventBus),
     scheduleInterview: new ScheduleInterviewUseCase(applicationRepo, eventBus),
+    proposeSchedule: new ProposeScheduleUseCase(applicationRepo, eventBus),
+    confirmProposedSchedule: new ConfirmProposedScheduleUseCase(applicationRepo, eventBus),
+    cancelProposedSchedule: new CancelProposedScheduleUseCase(applicationRepo, eventBus),
+    decideAfterCasualInterview: new DecideAfterCasualInterviewUseCase(applicationRepo, eventBus),
     rescheduleInterview: new RescheduleInterviewUseCase(applicationRepo, eventBus),
     assignReverseQuestion: new AssignReverseQuestionUseCase(applicationRepo, companyRepo, eventBus),
     recordQuestionAnswer: new RecordQuestionAnswerUseCase(applicationRepo, eventBus),

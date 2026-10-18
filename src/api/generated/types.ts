@@ -27,6 +27,10 @@ export type InterviewReflection = Schemas['InterviewReflection'];
 export type InterviewSession = Schemas['InterviewSession'];
 export type PreparationTodo = Schemas['PreparationTodo'];
 export type JobApplication = Schemas['JobApplication'];
+export type ProposedSchedule = Schemas['ProposedSchedule'];
+export type ProposeScheduleRequest = Schemas['ProposeScheduleRequest'];
+export type ConfirmProposedScheduleRequest = Schemas['ConfirmProposedScheduleRequest'];
+export type CasualDecisionRequest = Schemas['CasualDecisionRequest'];
 export type DomainEvent = Schemas['DomainEvent'];
 
 // Request Bodies

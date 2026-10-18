@@ -11,7 +11,7 @@ import { Result } from '@/domain/shared/Result';
 
 export interface CreateJobApplicationCommand {
   companyId: string;
-  positionTitle: string;
+  positionTitle?: string;
   jobDescriptionUrl?: string;
   salaryMin?: number;
   salaryMax?: number;
@@ -45,8 +45,12 @@ export class CreateJobApplicationUseCase {
     });
     if (salaryRes.isFailure()) return Result.fail(salaryRes.getError());
 
+    const title =
+      command.positionTitle?.trim() ||
+      (command.initialStageCode === 'CASUAL_INTERVIEW' ? 'ポジション未定' : '');
+
     const posRes = PositionDetails.create({
-      title: command.positionTitle,
+      title,
       jobDescriptionUrl: command.jobDescriptionUrl,
       expectedSalaryRange: salaryRes.getValue(),
       targetSeniority: command.targetSeniority,

@@ -10,6 +10,7 @@ import {
   type StockedQuestionRow,
   type TargetCompanyRow,
 } from '../mappers/TargetCompanyMapper';
+import { appendDomainEvents } from '../outbox/domainEvents';
 import { groupBy, insertRows, isForeignKeyViolation } from '../sql';
 
 const COMPANY_COLUMNS = [
@@ -42,6 +43,7 @@ const QUESTION_COLUMNS = [
 /**
  * TargetCompany aggregate repository.
  * Stocked questions are replaced in full on every save (ADR-0006).
+ * Domain events are appended in the same transaction (ADR-0012).
  */
 export class PostgresTargetCompanyRepository implements ITargetCompanyRepository {
   public constructor(private readonly db: SqlClient) {}
@@ -68,6 +70,8 @@ export class PostgresTargetCompanyRepository implements ITargetCompanyRepository
          ON CONFLICT (id) DO UPDATE SET ${assignments}`,
         params
       );
+
+      await appendDomainEvents(tx, 'TargetCompany', company.domainEvents);
 
       await tx.query('DELETE FROM stocked_reverse_questions WHERE company_id = $1', [
         company.id.value,

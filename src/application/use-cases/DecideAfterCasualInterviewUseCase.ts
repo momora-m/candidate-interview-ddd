@@ -1,7 +1,6 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { Result } from '@/domain/shared/Result';
-import { IEventBus } from '../events/IEventBus';
 
 export interface DecideAfterCasualInterviewCommand {
   applicationId: string;
@@ -12,7 +11,6 @@ export interface DecideAfterCasualInterviewCommand {
 export class DecideAfterCasualInterviewUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(
@@ -30,8 +28,6 @@ export class DecideAfterCasualInterviewUseCase {
     if (decided.isFailure()) return Result.fail(decided.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
     return Result.ok({ nextStageName: decided.getValue().nextStage.label });
   }
 }

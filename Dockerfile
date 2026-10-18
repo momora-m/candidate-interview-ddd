@@ -18,6 +18,14 @@ ENV TZ=Asia/Tokyo
 EXPOSE 4317
 CMD ["npm", "run", "api"]
 
+# Cloud Run serves the built SPA and the API from this one process.
+# Local Compose keeps the api and web targets separate.
+FROM api AS production
+COPY --from=builder /app/dist ./dist
+ENV NODE_ENV=production
+ENV PORT=8080
+EXPOSE 8080
+
 FROM nginx:1.27-alpine AS web
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html

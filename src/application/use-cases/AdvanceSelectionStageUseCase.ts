@@ -1,5 +1,4 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
-import { IEventBus } from '../events/IEventBus';
 import { ApplicationId } from '@/domain/application/ApplicationId';
 import { Result } from '@/domain/shared/Result';
 
@@ -10,7 +9,6 @@ export interface AdvanceSelectionStageCommand {
 export class AdvanceSelectionStageUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: AdvanceSelectionStageCommand): Promise<Result<{ nextStageName: string }>> {
@@ -26,9 +24,6 @@ export class AdvanceSelectionStageUseCase {
     if (res.isFailure()) return Result.fail(res.getError());
 
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok({ nextStageName: res.getValue().nextStage.label });
   }
 }

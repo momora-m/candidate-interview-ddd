@@ -813,6 +813,22 @@ paths:
                 items:
                   $ref: '#/components/schemas/DomainEvent'
 
+  /api/events/stream:
+    get:
+      tags: [Events]
+      summary: ドメインイベントの Server-Sent Events 購読
+      operationId: streamEvents
+      description: |
+        コミット済みドメインイベントを `event: domain-event` でプッシュする。
+        接続維持のため 15 秒ごとに `event: ping` を送る。
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
 components:
   schemas:
     HealthStatus:

@@ -36,6 +36,7 @@ import {
   ProposedScheduleConfirmedEvent,
   ProposedScheduleCancelledEvent,
   CasualInterviewDecisionMadeEvent,
+  JobApplicationOpenedEvent,
 } from '../events/CandidateDomainEvents';
 
 export interface JobApplicationProps {
@@ -140,23 +141,29 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
 
     const motivation = props.motivation || PositionMotivation.create({}).getValue();
     const now = new Date();
-
-    return Result.ok(
-      new JobApplication({
-        id,
-        companyId: props.companyId,
-        positionDetails: props.positionDetails,
-        motivation,
-        currentStage: stageResult.getValue(),
-        status: ApplicationStatus.inProgress(),
-        sessions: [],
-        proposedSchedules: [],
-        todos: [],
-        version: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
+    const application = new JobApplication({
+      id,
+      companyId: props.companyId,
+      positionDetails: props.positionDetails,
+      motivation,
+      currentStage: stageResult.getValue(),
+      status: ApplicationStatus.inProgress(),
+      sessions: [],
+      proposedSchedules: [],
+      todos: [],
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    application.addDomainEvent(
+      new JobApplicationOpenedEvent(
+        application.id.value,
+        props.companyId.value,
+        application.positionDetails.title,
+        application.currentStage.code
+      )
     );
+    return Result.ok(application);
   }
 
   public static hydrate(props: JobApplicationProps): JobApplication {

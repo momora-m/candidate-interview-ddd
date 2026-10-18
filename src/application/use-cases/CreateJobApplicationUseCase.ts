@@ -1,6 +1,5 @@
 import { IJobApplicationRepository } from '@/domain/repositories/IJobApplicationRepository';
 import { ITargetCompanyRepository } from '@/domain/repositories/ITargetCompanyRepository';
-import { IEventBus } from '../events/IEventBus';
 import { CompanyId } from '@/domain/company/CompanyId';
 import { JobApplication } from '@/domain/application/JobApplication';
 import { PositionDetails, DesirabilityRating } from '@/domain/application/PositionDetails';
@@ -27,7 +26,6 @@ export class CreateJobApplicationUseCase {
   constructor(
     private readonly applicationRepo: IJobApplicationRepository,
     private readonly companyRepo: ITargetCompanyRepository,
-    private readonly eventBus: IEventBus
   ) {}
 
   public async execute(command: CreateJobApplicationCommand): Promise<Result<JobApplication>> {
@@ -75,9 +73,6 @@ export class CreateJobApplicationUseCase {
 
     const app = appRes.getValue();
     await this.applicationRepo.save(app);
-    await this.eventBus.publishAll(app.domainEvents);
-    app.clearEvents();
-
     return Result.ok(app);
   }
 }

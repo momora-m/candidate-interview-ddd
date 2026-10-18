@@ -1,0 +1,36 @@
+# ==============================================================================
+# terraform.tfvars.example (設定テンプレート)
+#
+# 【重要】
+# 1. このファイルを `terraform.tfvars` にコピーして実際の値を記入してください。
+# 2. `terraform.tfvars` は `.gitignore` により Git リポジトリから完全に除外されます。
+# 3. DB パスワードは Terraform (random_password) と Secret Manager により
+#    自動生成・暗号化管理されるため、このファイルにパスワードを記述する必要はありません。
+# ==============================================================================
+
+# Google Cloud プロジェクト ID
+project_id = "your-gcp-project-id"
+
+# デプロイするリージョン（東京リージョン推奨）
+region = "asia-northeast1"
+
+# アプリケーション名
+app_name = "candidate-interview"
+
+# データベース名およびユーザー名
+db_name = "candidate_interview"
+db_user = "candidate_app"
+
+# 認証・アクセスを許可する Google アカウントのメールアドレス
+allowed_user_email = "your-email@example.com"
+
+# Artifact Registry などに push したコンテナイメージ
+# 初回デプロイ時はプレースホルダーのままでも構いません
+container_image = "asia-northeast1-docker.pkg.dev/your-gcp-project-id/candidate-interview/app:latest"
+
+# Cloud IAP 有効化後に取得できる JWT Audience（デプロイ後に設定可能）
+# 例: "/projects/1234567890/global/backendServices/9876543210"
+iap_audience = ""
+
+# Cloud SQL の削除保護（個人利用の最小コスト構成では再作成を容易にするため false 推奨）
+cloud_sql_deletion_protection = false

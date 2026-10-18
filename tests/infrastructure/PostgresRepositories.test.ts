@@ -40,6 +40,9 @@ describe('PostgreSQL aggregate repositories', () => {
   beforeEach(async () => {
     await db.query(`
       TRUNCATE TABLE
+        read_model_applications,
+        read_model_companies,
+        domain_events,
         assigned_reverse_questions,
         preparation_todos,
         proposed_schedule_slots,
@@ -104,6 +107,7 @@ describe('PostgreSQL aggregate repositories', () => {
     const keptSession = application.sessions[1];
 
     await applications.save(application);
+    assert.ok(await count(db, 'domain_events') > 0);
 
     const loaded = await applications.findById(application.id);
     assert.ok(loaded);
@@ -291,6 +295,7 @@ describe('PostgreSQL aggregate repositories', () => {
     assert.equal(await count(db, 'interview_sessions'), 0);
     assert.equal(await count(db, 'assigned_reverse_questions'), 0);
     assert.equal(await count(db, 'preparation_todos'), 0);
+    assert.equal(await count(db, 'domain_events'), 0);
     assert.equal((await companies.findById(company.id))?.name, '北極星テック');
   });
 

@@ -1,5 +1,10 @@
 import { AggregateRoot } from '../shared/AggregateRoot';
 import { Result } from '../shared/Result';
+import {
+  StockedReverseQuestionAddedEvent,
+  StockedReverseQuestionRemovedEvent,
+  TargetCompanyRegisteredEvent,
+} from '../events/CandidateDomainEvents';
 import { CompanyId } from './CompanyId';
 import { CompanyProfile } from './CompanyProfile';
 import { StockedReverseQuestion } from './StockedReverseQuestion';
@@ -61,17 +66,16 @@ export class TargetCompany extends AggregateRoot<CompanyId> {
 
     const id = props.id || CompanyId.create().getValue();
     const now = new Date();
-
-    return Result.ok(
-      new TargetCompany({
-        id,
-        name: props.name.trim(),
-        profile: props.profile,
-        stockedQuestions: props.stockedQuestions || [],
-        createdAt: now,
-        updatedAt: now,
-      })
-    );
+    const company = new TargetCompany({
+      id,
+      name: props.name.trim(),
+      profile: props.profile,
+      stockedQuestions: props.stockedQuestions || [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    company.addDomainEvent(new TargetCompanyRegisteredEvent(company.id.value, company.name));
+    return Result.ok(company);
   }
 
   public static hydrate(props: TargetCompanyProps): TargetCompany {
@@ -91,6 +95,9 @@ export class TargetCompany extends AggregateRoot<CompanyId> {
 
     this._stockedQuestions.push(question);
     this._updatedAt = new Date();
+    this.addDomainEvent(
+      new StockedReverseQuestionAddedEvent(this.id.value, question.id, question.questionText)
+    );
     return Result.ok(undefined);
   }
 
@@ -102,6 +109,7 @@ export class TargetCompany extends AggregateRoot<CompanyId> {
     }
 
     this._updatedAt = new Date();
+    this.addDomainEvent(new StockedReverseQuestionRemovedEvent(this.id.value, questionId));
     return Result.ok(undefined);
   }
 }

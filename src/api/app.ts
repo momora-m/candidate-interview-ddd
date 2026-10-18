@@ -1,12 +1,17 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import { swaggerUI } from '@hono/swagger-ui';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CandidateUseCases } from '@/application/createCandidateUseCases';
+import type { IEventBus } from '@/application/events/IEventBus';
 import type { CandidateQueryService } from '@/application/queries/CandidateQueryService';
+import { toEventDTO } from '@/application/read-model/candidateReadModel';
+import { createIapAuthMiddleware, type IapAuthConfig, type IapJwtVerifier } from './auth/iapAuth';
 import { domainError, jsonBody } from './http';
+import { staticFileResponse } from './staticSpa';
 import {
   addQuestionSchema,
   addTodoSchema,
@@ -29,10 +34,31 @@ const openapiYamlPath = resolve(
   '../../docs/openapi/openapi.yaml'
 );
 
+export interface ApiAuth {
+  config: IapAuthConfig;
+  verifier: IapJwtVerifier;
+}
+
 export interface ApiRuntime {
   persistence: 'memory' | 'postgres';
   queries: CandidateQueryService;
   useCases: CandidateUseCases;
+  eventBus: IEventBus;
+  auth?: ApiAuth;
+  staticRoot?: string;
+}
+
+function authFor(runtime: ApiRuntime): ApiAuth {
+  return (
+    runtime.auth ?? {
+      config: { enabled: false },
+      verifier: {
+        async verify() {
+          throw new Error('IAP は無効です。');
+        },
+      },
+    }
+  );
 }
 
 export function createApp(runtime: ApiRuntime) {
@@ -46,10 +72,17 @@ export function createApp(runtime: ApiRuntime) {
     return openapiYamlCache;
   };
 
-  return new Hono()
+  const app = new Hono()
+    .use('*', createIapAuthMiddleware(authFor(runtime)))
     .use('*', cors())
-    .get('/', (c) =>
-      c.json({
+    .get('/', (c) => {
+      if (runtime.staticRoot) {
+        const file = staticFileResponse(c, runtime.staticRoot, '/');
+        if (file) {
+          return file;
+        }
+      }
+      return c.json({
         name: 'candidate-interview-api',
         persistence: runtime.persistence,
         documentation: '/docs',
@@ -58,8 +91,9 @@ export function createApp(runtime: ApiRuntime) {
         companies: '/api/companies',
         applications: '/api/applications',
         events: '/api/events',
-      })
-    )
+        eventStream: '/api/events/stream',
+      });
+    })
     .get('/openapi.yaml', (c) => {
       return c.text(getOpenapiYaml(), 200, {
         'content-type': 'application/yaml; charset=utf-8',
@@ -310,7 +344,53 @@ export function createApp(runtime: ApiRuntime) {
         return c.json(await queries.getApplication(applicationId));
       }
     )
-    .get('/api/events', (c) => c.json(queries.listEvents()));
+    .get('/api/events', async (c) => c.json(await queries.listEvents()))
+    .get('/api/events/stream', (c) => {
+      c.header('X-Accel-Buffering', 'no');
+      return streamSSE(c, async (stream) => {
+        const unsubscribe = runtime.eventBus.subscribe('*', async (event) => {
+          if (stream.aborted || stream.closed) {
+            return;
+          }
+          await stream.writeSSE({
+            event: 'domain-event',
+            id: event.eventId,
+            data: JSON.stringify(toEventDTO(event)),
+          });
+        });
+        stream.onAbort(() => {
+          unsubscribe();
+        });
+        try {
+          for (let elapsed = 0; !stream.aborted && !stream.closed; elapsed += 250) {
+            await stream.sleep(250);
+            if (stream.aborted || stream.closed) {
+              break;
+            }
+            if (elapsed > 0 && elapsed % 15000 === 0) {
+              await stream.writeSSE({ event: 'ping', data: '{}' });
+            }
+          }
+        } finally {
+          unsubscribe();
+        }
+      });
+    });
+
+  if (runtime.staticRoot) {
+    const staticRoot = runtime.staticRoot;
+    app.notFound((c) => {
+      if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+        const file = staticFileResponse(c, staticRoot, c.req.path);
+        if (file) {
+          return file;
+        }
+      }
+      return c.json({ error: '見つかりません。' }, 404);
+    });
+  }
+
+  return app;
 }
 
 export type AppType = ReturnType<typeof createApp>;

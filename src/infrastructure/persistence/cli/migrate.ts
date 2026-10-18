@@ -11,4 +11,4 @@ if (!connectionString) {
 
 const persistence = await createPostgresPersistence(connectionString);
 await persistence.db.close();
-console.log('PostgreSQL schema applied.');
+console.log('PostgreSQL schema migrations are up to date. Seed data was not applied.');

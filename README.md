@@ -147,7 +147,7 @@ docker compose up -d postgres
 DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview npm run db:migrate
 ```
 
-`npm run db:migrate` は `db/migrations/001_initial.sql` と `db/migrations/003_domain_events_and_read_models.sql` を適用します。サンプル行は `002_seed.sql` 側です。API 起動時にも同じスキーマを適用し、書き込みモデルから画面用リードモデルを組み直します。
+`npm run db:migrate` と API の起動は、`db/migrations` のスキーマだけを適用します。ファイル名に `seed` を含む SQL（`002_seed.sql`）は開発用データなので、ここには含めません。適用済みのファイル名は `schema_migrations` に記録し、次回起動ではスキップします。スキーマ適用のあと、書き込みモデルから画面用リードモデルを組み直します。
 
 ### API サーバー (Hono)
 ```bash
@@ -160,6 +160,14 @@ DATABASE_URL=postgres://candidate:candidate@localhost:54329/candidate_interview 
 ```
 
 待受は `http://127.0.0.1:4317` です。`GET /health` で起動確認できます。リクエストの形は Zod が検査し、ドメインルール違反はユースケースの `Result` を 400 / 404 / 409 に変換します。画面向けの GET は集約を組み立てず、リードモデルの文書を 1 回の SELECT で返します。`GET /api/events/stream` はコミット後のドメインイベントを Server-Sent Events で流します。
+
+開発中は Vite が画面を配信します。`NODE_ENV=production` のときは、同じ Hono プロセスが `dist/` の静的ファイルと SPA の `index.html` も返します。`/health` 以外は Cloud IAP の JWT（`X-Goog-IAP-JWT-Assertion`）を検証し、`IAP_ALLOWED_EMAIL` と一致するユーザーだけを通します。本番起動に必要な環境変数は `IAP_AUDIENCE` と `IAP_ALLOWED_EMAIL` です。データベースは `DATABASE_URL`、または Cloud SQL ソケット用の `INSTANCE_CONNECTION_NAME` / `DB_USER` / `DB_NAME`（任意で `DB_PASSWORD`）です。
+
+単一コンテナの本番イメージは次でビルドします。ローカルの Compose はこれまでどおり `api` と `web` を分けて使います。
+
+```bash
+docker build --target production -t candidate-interview .
+```
 
 型だけ共有するクライアントの例:
 

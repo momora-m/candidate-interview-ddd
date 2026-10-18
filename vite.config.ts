@@ -14,5 +14,11 @@ export default defineConfig({
   server: {
     port: 3847,
     host: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:4317',
+      '/docs': 'http://127.0.0.1:4317',
+      '/openapi.yaml': 'http://127.0.0.1:4317',
+      '/health': 'http://127.0.0.1:4317',
+    },
   },
 });

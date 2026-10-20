@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Briefcase, Plus, Star } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { StageCode, STAGE_DEFINITIONS } from '@/domain/application/SelectionStage';
@@ -9,6 +9,16 @@ interface CreateApplicationModalProps {
   onClose: () => void;
 }
 
+export function resolveSelectedCompanyId(
+  companies: readonly { id: string }[],
+  currentId: string
+): string {
+  if (companies.some((company) => company.id === currentId)) {
+    return currentId;
+  }
+  return companies[0]?.id ?? '';
+}
+
 export const CreateApplicationModal: React.FC<CreateApplicationModalProps> = ({
   isOpen,
   onClose,
@@ -16,6 +26,13 @@ export const CreateApplicationModal: React.FC<CreateApplicationModalProps> = ({
   const { companies, createJobApplication } = useApp();
 
   const [companyId, setCompanyId] = useState(companies[0]?.id || '');
+
+  useEffect(() => {
+    const nextCompanyId = resolveSelectedCompanyId(companies, companyId);
+    if (nextCompanyId !== companyId) {
+      setCompanyId(nextCompanyId);
+    }
+  }, [companies, companyId]);
   const [positionTitle, setPositionTitle] = useState('');
   const [jobDescriptionUrl, setJobDescriptionUrl] = useState('');
   const [salaryMin, setSalaryMin] = useState<number | undefined>(10000000);
@@ -36,6 +53,16 @@ export const CreateApplicationModal: React.FC<CreateApplicationModalProps> = ({
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+
+    if (!companyId) {
+      setError(
+        companies.length === 0
+          ? '先に志望企業を登録してください。'
+          : '志望先企業を選択してください。'
+      );
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const res = await createJobApplication({

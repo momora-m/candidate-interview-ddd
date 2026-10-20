@@ -36,9 +36,28 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
 async function readErrorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === 'string' && body.error.length > 0) {
-      return body.error;
+    const body = (await response.json()) as {
+      error?: unknown;
+      issues?: { path?: unknown; message?: unknown }[];
+    };
+    const headline = typeof body.error === 'string' ? body.error : '';
+    const details = Array.isArray(body.issues)
+      ? body.issues
+          .map((issue) => {
+            const path = typeof issue.path === 'string' ? issue.path : '';
+            const message = typeof issue.message === 'string' ? issue.message : '';
+            if (path && message) {
+              return `${path}: ${message}`;
+            }
+            return message || path;
+          })
+          .filter((line) => line.length > 0)
+      : [];
+    if (headline && details.length > 0) {
+      return `${headline} ${details.join(' / ')}`;
+    }
+    if (headline.length > 0) {
+      return headline;
     }
   } catch {
     // Non-JSON bodies (proxy errors, empty responses) fall through.

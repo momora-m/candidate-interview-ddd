@@ -60,8 +60,7 @@ export const createApplicationSchema = z.object({
   initialStageCode: stageCodeSchema.optional(),
 });
 
-export const scheduleInterviewSchema = z.object({
-  stageCode: stageCodeSchema.optional(),
+export const reviseInterviewSchema = z.object({
   startTime: z.string().min(1),
   endTime: z.string().min(1),
   formatType: z.enum(['ONLINE', 'IN_PERSON']),
@@ -72,6 +71,10 @@ export const scheduleInterviewSchema = z.object({
   receptionInstructions: z.string().optional(),
   estimatedTravelMinutes: z.number().int().nonnegative().optional(),
   interviewerNames: z.array(z.string()).optional(),
+});
+
+export const scheduleInterviewSchema = reviseInterviewSchema.extend({
+  stageCode: stageCodeSchema.optional(),
 });
 
 export const proposeScheduleSchema = z.object({

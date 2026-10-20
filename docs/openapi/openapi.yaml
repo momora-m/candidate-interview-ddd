@@ -108,6 +108,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    patch:
+      tags: [Companies]
+      summary: 志望企業の訂正
+      description: >
+        企業IDと逆質問ストックは保ったまま、企業名とプロフィールを差し替えます。
+        この企業を参照する選考の表示名も更新されます。
+      operationId: reviseCompany
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          description: 志望企業ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompanyRequest'
+      responses:
+        '200':
+          description: 志望企業の訂正成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetCompany'
+        '400':
+          description: 入力バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 企業が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/companies/{companyId}/questions:
     post:
       tags: [Companies]
@@ -517,6 +557,58 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: 日程変更先での重複衝突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/applications/{applicationId}/interviews/{sessionId}:
+    patch:
+      tags: [Interviews]
+      summary: 確定面接の訂正
+      description: >
+        未完了の面接セッションについて、開始・終了、開催形式、面接官名を差し替えます。
+        セッションIDとステージは変わりません。完了済みの面接は訂正できません。
+        訂正後の形式で移動・準備バッファを再検証し、紐づく未完了TODOの期限を新しい開始時刻に合わせます。
+      operationId: reviseInterview
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviseInterviewRequest'
+      responses:
+        '200':
+          description: 面接訂正成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobApplication'
+        '400':
+          description: 入力値不正、または完了済み面接
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: 応募または面接セッションが見つからない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 訂正後の日時が他の予定と重複する
           content:
             application/json:
               schema:
@@ -1152,10 +1244,16 @@ components:
         meetingUrl:
           type: string
           nullable: true
+        meetingPasscode:
+          type: string
+          nullable: true
         locationName:
           type: string
           nullable: true
         roomName:
+          type: string
+          nullable: true
+        receptionInstructions:
           type: string
           nullable: true
         travelBufferMinutes:
@@ -1594,6 +1692,39 @@ components:
       properties:
         stageCode:
           $ref: '#/components/schemas/StageCode'
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        formatType:
+          $ref: '#/components/schemas/FormatType'
+        meetingUrl:
+          type: string
+        meetingPasscode:
+          type: string
+        locationName:
+          type: string
+        roomName:
+          type: string
+        receptionInstructions:
+          type: string
+        estimatedTravelMinutes:
+          type: integer
+          minimum: 0
+        interviewerNames:
+          type: array
+          items:
+            type: string
+
+    ReviseInterviewRequest:
+      type: object
+      required:
+        - startTime
+        - endTime
+        - formatType
+      properties:
         startTime:
           type: string
           format: date-time

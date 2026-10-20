@@ -38,6 +38,7 @@ export type CreateCompanyRequest = Schemas['CreateCompanyRequest'];
 export type AddStockedQuestionRequest = Schemas['AddStockedQuestionRequest'];
 export type CreateApplicationRequest = Schemas['CreateApplicationRequest'];
 export type ScheduleInterviewRequest = Schemas['ScheduleInterviewRequest'];
+export type ReviseInterviewRequest = Schemas['ReviseInterviewRequest'];
 export type RescheduleInterviewRequest = Schemas['RescheduleInterviewRequest'];
 export type AssignQuestionRequest = Schemas['AssignQuestionRequest'];
 export type RecordAnswerRequest = Schemas['RecordAnswerRequest'];

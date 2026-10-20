@@ -223,4 +223,150 @@ describe('Hono candidate API', () => {
     assert.match(text, /TARGET_COMPANY_REGISTERED/);
     await reader.cancel();
   });
+
+  test('revises a company profile and an open interview without touching completed records', async () => {
+    const app = testApp();
+    const companyResponse = await postJson(app, '/api/companies', {
+      name: '訂正前テック',
+      productSummary: '旧プロダクト',
+      targetAudience: 'B2B_SMB',
+      revenueStream: '月額',
+      primaryLanguages: ['TypeScript'],
+    });
+    assert.equal(companyResponse.status, 201);
+    const company = await companyResponse.json();
+
+    const questionResponse = await postJson(app, `/api/companies/${company.id}/questions`, {
+      category: 'TECH_STACK',
+      targetRole: 'LEAD_ENGINEER',
+      questionText: '本番のリリース頻度は？',
+      hypothesisOrIntent: '変更容易性を見たい',
+    });
+    assert.equal(questionResponse.status, 201);
+
+    const applicationResponse = await postJson(app, '/api/applications', {
+      companyId: company.id,
+      positionTitle: 'Backend Engineer',
+      initialStageCode: 'FIRST_TECHNICAL',
+    });
+    const created = await applicationResponse.json();
+    const interviewResponse = await postJson(app, `/api/applications/${created.id}/interviews`, {
+      stageCode: 'FIRST_TECHNICAL',
+      startTime: '2027-01-06T01:00:00.000Z',
+      endTime: '2027-01-06T02:00:00.000Z',
+      formatType: 'ONLINE',
+      meetingUrl: 'https://zoom.us/j/111',
+      meetingPasscode: 'old-pass',
+      interviewerNames: ['佐藤'],
+    });
+    assert.equal(interviewResponse.status, 201);
+    const scheduled = await interviewResponse.json();
+    const sessionId = scheduled.sessionId as string;
+
+    const revisedCompany = await app.request(`/api/companies/${company.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '訂正後テック',
+        productSummary: '新プロダクト',
+        targetAudience: 'B2B_ENTERPRISE',
+        revenueStream: '年額',
+        primaryLanguages: ['Go'],
+      }),
+    });
+    assert.equal(revisedCompany.status, 200);
+    const companyBody = await revisedCompany.json();
+    assert.equal(companyBody.name, '訂正後テック');
+    assert.equal(companyBody.businessModel.productSummary, '新プロダクト');
+    assert.equal(companyBody.stockedQuestions.length, 1);
+    assert.equal(companyBody.id, company.id);
+
+    const listed = await app.request('/api/applications');
+    const applications = await listed.json();
+    assert.equal(applications.find((item: { id: string }) => item.id === created.id).companyName, '訂正後テック');
+
+    const revisedInterview = await app.request(
+      `/api/applications/${created.id}/interviews/${sessionId}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          startTime: '2027-02-02T05:00:00.000Z',
+          endTime: '2027-02-02T06:00:00.000Z',
+          formatType: 'IN_PERSON',
+          locationName: '大阪本社',
+          roomName: '会議室B',
+          estimatedTravelMinutes: 30,
+          interviewerNames: ['鈴木'],
+        }),
+      }
+    );
+    assert.equal(revisedInterview.status, 200);
+    const revised = await revisedInterview.json();
+    const session = revised.sessions[0];
+    assert.equal(session.id, sessionId);
+    assert.equal(session.stageCode, 'FIRST_TECHNICAL');
+    assert.equal(session.formatType, 'IN_PERSON');
+    assert.equal(session.locationName, '大阪本社');
+    assert.deepEqual(session.interviewerNames, ['鈴木']);
+    assert.ok(
+      revised.todos
+        .filter((todo: { statusCode: string }) => todo.statusCode !== 'DONE' && todo.statusCode !== 'SKIPPED')
+        .every((todo: { dueDate: string }) => todo.dueDate === '2027-02-02T05:00:00.000Z')
+    );
+
+    const doneTodo = revised.todos[0];
+    const doneResponse = await app.request(
+      `/api/applications/${created.id}/todos/${doneTodo.id}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ newStatus: 'DONE' }),
+      }
+    );
+    assert.equal(doneResponse.status, 200);
+
+    const movedAgain = await app.request(`/api/applications/${created.id}/interviews/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        startTime: '2027-03-03T05:00:00.000Z',
+        endTime: '2027-03-03T06:00:00.000Z',
+        formatType: 'IN_PERSON',
+        locationName: '大阪本社',
+        roomName: '会議室B',
+        estimatedTravelMinutes: 30,
+        interviewerNames: ['鈴木'],
+      }),
+    });
+    const moved = await movedAgain.json();
+    const finished = moved.todos.find((todo: { id: string }) => todo.id === doneTodo.id);
+    const openTodo = moved.todos.find((todo: { id: string }) => todo.id !== doneTodo.id);
+    assert.equal(finished.dueDate, '2027-02-02T05:00:00.000Z');
+    assert.equal(openTodo.dueDate, '2027-03-03T05:00:00.000Z');
+
+    const reflection = await postJson(
+      app,
+      `/api/applications/${created.id}/interviews/${sessionId}/reflection`,
+      {
+        candidatePerformanceRating: 4,
+        companyImpressionRating: 4,
+        keyLearningsAndInsights: '設計の話が中心だった',
+        nextActionNotes: '課題を送る',
+      }
+    );
+    assert.equal(reflection.status, 200);
+    const locked = await app.request(`/api/applications/${created.id}/interviews/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        startTime: '2027-04-04T05:00:00.000Z',
+        endTime: '2027-04-04T06:00:00.000Z',
+        formatType: 'ONLINE',
+        meetingUrl: 'https://zoom.us/j/999',
+      }),
+    });
+    assert.equal(locked.status, 400);
+    assert.match((await locked.json()).error, /完了済み/);
+  });
 });

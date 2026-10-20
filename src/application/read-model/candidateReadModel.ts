@@ -57,8 +57,10 @@ export function toApplicationDTO(
     formatType: session.format.type,
     formatSummary: session.format.getDisplaySummary(),
     meetingUrl: session.format.onlineDetails?.meetingUrl.url,
+    meetingPasscode: session.format.onlineDetails?.meetingPasscode,
     locationName: session.format.inPersonDetails?.locationName,
     roomName: session.format.inPersonDetails?.roomName,
+    receptionInstructions: session.format.inPersonDetails?.receptionInstructions,
     travelBufferMinutes: session.format.travelBufferMinutes,
     interviewerNames: [...session.interviewerNames],
     assignedQuestions: session.assignedQuestions.map((question) => ({

@@ -23,6 +23,7 @@ import { TaskPriority } from '../todo/TaskPriority';
 import {
   InterviewSessionScheduledEvent,
   InterviewSessionRescheduledEvent,
+  InterviewSessionRevisedEvent,
   ReverseQuestionAssignedEvent,
   ReverseQuestionAnswerRecordedEvent,
   InterviewReflectionRecordedEvent,
@@ -463,14 +464,7 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
     const res = session.reschedule(newTimeWindow);
     if (res.isFailure()) return res;
 
-    // Update attend task title / due date
-    const attendTodo = this._todos.find(
-      (t) => t.interviewSessionId?.equals(sessionId) && t.taskType.code === 'ATTEND_INTERVIEW'
-    );
-    if (attendTodo) {
-      // Due date update
-    }
-
+    this.alignOpenTodoDueDates(sessionId, newTimeWindow);
     this._updatedAt = new Date();
     this.addDomainEvent(
       new InterviewSessionRescheduledEvent(
@@ -481,6 +475,36 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
       )
     );
 
+    return Result.ok(undefined);
+  }
+
+  public reviseInterview(
+    sessionId: InterviewSessionId,
+    props: {
+      timeWindow: TimeWindow;
+      format: InterviewFormat;
+      interviewerNames: readonly string[];
+    }
+  ): Result<void> {
+    const session = this._sessions.find((item) => item.id.equals(sessionId));
+    if (!session) {
+      return Result.fail(`ID: ${sessionId.value} の面接セッションが見つかりません。`);
+    }
+
+    const previousSummary = `${session.timeWindow.formatJP()} / ${session.format.getDisplaySummary()}`;
+    const revised = session.reviseArrangement(props);
+    if (revised.isFailure()) return revised;
+
+    this.alignOpenTodoDueDates(sessionId, props.timeWindow);
+    this._updatedAt = new Date();
+    this.addDomainEvent(
+      new InterviewSessionRevisedEvent(
+        this.id.value,
+        session.id.value,
+        previousSummary,
+        `${props.timeWindow.formatJP()} / ${props.format.getDisplaySummary()}`
+      )
+    );
     return Result.ok(undefined);
   }
 
@@ -736,5 +760,17 @@ export class JobApplication extends AggregateRoot<ApplicationId> {
     );
 
     return Result.ok(undefined);
+  }
+
+  private alignOpenTodoDueDates(sessionId: InterviewSessionId, timeWindow: TimeWindow): void {
+    for (const todo of this._todos) {
+      if (!todo.interviewSessionId?.equals(sessionId) || todo.status.isCompleted) {
+        continue;
+      }
+      todo.shiftDueDate(timeWindow.start);
+      if (todo.taskType.code === 'ATTEND_INTERVIEW') {
+        todo.retitle(todo.title.replace(/面接本番 \(.*\)$/, `面接本番 (${timeWindow.formatJP()})`));
+      }
+    }
   }
 }

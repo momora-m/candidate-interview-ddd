@@ -9,7 +9,9 @@ import {
   ShieldAlert,
   ArrowRight,
   Sparkles,
+  Pencil,
 } from 'lucide-react';
+import { InterviewSessionDTO } from '@/application/dtos/CandidateApplicationDTOs';
 import { resolveSelectedApplicationId } from '@/components/resolveSelectedApplicationId';
 import { useApp } from '@/context/AppContext';
 import { CandidateScheduleConflictDomainService } from '@/domain/services/CandidateScheduleConflictDomainService';
@@ -18,7 +20,11 @@ import { InterviewFormat } from '@/domain/interview/InterviewFormat';
 import { MeetingUrl } from '@/domain/interview/MeetingUrl';
 import { JobApplication } from '@/domain/application/JobApplication';
 
-export const ScheduleManagerView: React.FC = () => {
+interface ScheduleManagerViewProps {
+  onOpenEditInterview: (applicationId: string, session: InterviewSessionDTO) => void;
+}
+
+export const ScheduleManagerView: React.FC<ScheduleManagerViewProps> = ({ onOpenEditInterview }) => {
   const { applications, proposeSchedule, confirmProposedSchedule, cancelProposedSchedule } = useApp();
   const [proposalAppId, setProposalAppId] = useState('');
   const [proposalDate, setProposalDate] = useState(() => {
@@ -442,6 +448,16 @@ export const ScheduleManagerView: React.FC = () => {
                     <span>{session.formatSummary}</span>
                   </span>
 
+                  {!session.isCompleted && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenEditInterview(session.appId, session)}
+                      className="text-xs px-2.5 py-1 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 flex items-center space-x-1"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>訂正</span>
+                    </button>
+                  )}
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                       session.isCompleted

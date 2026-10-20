@@ -2,20 +2,47 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Calendar, Clock, MapPin, Video, AlertTriangle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { StageCode, STAGE_DEFINITIONS } from '@/domain/application/SelectionStage';
+import { InterviewSessionDTO } from '@/application/dtos/CandidateApplicationDTOs';
 import { resolveSelectedApplicationId } from '@/components/resolveSelectedApplicationId';
+
+const DURATION_CHOICES = [30, 45, 60, 90, 120];
+
+export interface InterviewRevisionTarget {
+  applicationId: string;
+  session: InterviewSessionDTO;
+}
+
+function localDateInput(iso: string): string {
+  const date = new Date(iso);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function localTimeInput(iso: string): string {
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function durationFromWindow(startIso: string, endIso: string): number {
+  const minutes = Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000);
+  return minutes > 0 ? minutes : 60;
+}
 
 interface ScheduleInterviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultApplicationId?: string;
+  revision?: InterviewRevisionTarget | null;
 }
 
 export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   isOpen,
   onClose,
   defaultApplicationId,
+  revision = null,
 }) => {
-  const { applications, scheduleInterview } = useApp();
+  const { applications, scheduleInterview, reviseInterview } = useApp();
 
   const [applicationId, setApplicationId] = useState('');
   const [stageCode, setStageCode] = useState<StageCode>('FIRST_TECHNICAL');
@@ -39,9 +66,33 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   const selectionKey = useRef<string | null>(null);
 
   useEffect(() => {
-    const key = isOpen ? (defaultApplicationId ?? '') : null;
+    const key = !isOpen
+      ? null
+      : revision
+        ? `edit:${revision.session.id}`
+        : `new:${defaultApplicationId ?? ''}`;
     const contextChanged = selectionKey.current !== key;
     selectionKey.current = key;
+    if (revision && contextChanged) {
+      const session = revision.session;
+      setApplicationId(revision.applicationId);
+      setStageCode(session.stageCode);
+      setDate(localDateInput(session.startTime));
+      setStartTimeStr(localTimeInput(session.startTime));
+      setDurationMinutes(durationFromWindow(session.startTime, session.endTime));
+      setFormatType(session.formatType);
+      setMeetingUrl(session.meetingUrl || 'https://zoom.us/j/1234567890');
+      setMeetingPasscode(session.meetingPasscode || '');
+      setLocationName(session.locationName || '東京本社オフィス');
+      setRoomName(session.roomName || '会議室A (3F)');
+      setTravelMinutes(session.formatType === 'IN_PERSON' ? session.travelBufferMinutes : 45);
+      setInterviewers(session.interviewerNames.join(', '));
+      setError(null);
+      return;
+    }
+    if (revision) {
+      return;
+    }
     setApplicationId((current) =>
       resolveSelectedApplicationId(
         applications,
@@ -49,7 +100,7 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
         defaultApplicationId
       )
     );
-  }, [isOpen, applications, defaultApplicationId]);
+  }, [isOpen, applications, defaultApplicationId, revision]);
 
   if (!isOpen) return null;
 
@@ -73,9 +124,8 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
       const start = new Date(`${date}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00`);
       const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
-      const res = await scheduleInterview({
+      const payload = {
         applicationId,
-        stageCode,
         startTime: start,
         endTime: end,
         formatType,
@@ -83,14 +133,18 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
         meetingPasscode: formatType === 'ONLINE' ? meetingPasscode : undefined,
         locationName: formatType === 'IN_PERSON' ? locationName : undefined,
         roomName: formatType === 'IN_PERSON' ? roomName : undefined,
+        receptionInstructions: formatType === 'IN_PERSON' ? revision?.session.receptionInstructions : undefined,
         estimatedTravelMinutes: formatType === 'IN_PERSON' ? travelMinutes : undefined,
         interviewerNames: interviewers.split(',').map((s) => s.trim()).filter(Boolean),
-      });
+      };
+      const res = revision
+        ? await reviseInterview({ ...payload, sessionId: revision.session.id })
+        : await scheduleInterview({ ...payload, stageCode });
 
       if (res.success) {
         onClose();
       } else {
-        setError(res.error || '日程登録に失敗しました。');
+        setError(res.error || (revision ? '面接の訂正に失敗しました。' : '日程登録に失敗しました。'));
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -108,8 +162,14 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
               <Calendar className="w-4 h-4 text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">面接日程の確定・予約</h2>
-              <p className="text-xs text-slate-400">移動バッファおよび他社面接重複チェックが自動実行されます</p>
+              <h2 className="text-base font-semibold text-white">
+                {revision ? '確定面接の訂正' : '面接日程の確定・予約'}
+              </h2>
+              <p className="text-xs text-slate-400">
+                {revision
+                  ? 'ステージと割り当て済みの逆質問はそのまま、日時・形式・面接官を更新します'
+                  : '移動バッファおよび他社面接重複チェックが自動実行されます'}
+              </p>
             </div>
           </div>
           <button
@@ -133,7 +193,8 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             <select
               value={applicationId}
               onChange={(e) => setApplicationId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              disabled={Boolean(revision)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-70"
               required
             >
               {applications.filter((a) => !a.isTerminal).map((app) => (
@@ -149,7 +210,8 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             <select
               value={stageCode}
               onChange={(e) => setStageCode(e.target.value as StageCode)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              disabled={Boolean(revision)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 disabled:opacity-70"
             >
               {Object.entries(STAGE_DEFINITIONS)
                 .filter(([, meta]) => meta.requiresInterview)
@@ -189,11 +251,14 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
                 onChange={(e) => setDurationMinutes(Number(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
               >
-                <option value={30}>30 分</option>
-                <option value={45}>45 分</option>
-                <option value={60}>60 分 (1時間)</option>
-                <option value={90}>90 分</option>
-                <option value={120}>120 分 (2時間)</option>
+                {(DURATION_CHOICES.includes(durationMinutes)
+                  ? DURATION_CHOICES
+                  : [...DURATION_CHOICES, durationMinutes].sort((left, right) => left - right)
+                ).map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes} 分
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -322,7 +387,9 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
               className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg shadow-md shadow-indigo-600/30 transition-all flex items-center space-x-1.5"
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>{submitting ? '検証 & 登録中...' : '面接日程を確定・タスク自動生成'}</span>
+              <span>
+                {submitting ? '検証 & 保存中...' : revision ? '訂正を保存' : '面接日程を確定・タスク自動生成'}
+              </span>
             </button>
           </div>
         </form>

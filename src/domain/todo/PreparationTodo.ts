@@ -122,6 +122,20 @@ export class PreparationTodo extends Entity<TodoId> {
     return new PreparationTodo(props);
   }
 
+  public shiftDueDate(dueDate: Date): void {
+    if (this._status.isCompleted) {
+      return;
+    }
+    this._dueDate = dueDate;
+  }
+
+  public retitle(title: string): void {
+    if (this._status.isCompleted || title.trim().length === 0) {
+      return;
+    }
+    this._title = title.trim();
+  }
+
   public updateStatus(newStatus: TaskStatus): Result<void> {
     this._status = newStatus;
     if (newStatus.isCompleted) {

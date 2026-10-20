@@ -25,6 +25,7 @@ import {
   recordAnswerSchema,
   recordReflectionSchema,
   rescheduleInterviewSchema,
+  reviseInterviewSchema,
   scheduleInterviewSchema,
   updateTodoSchema,
 } from './schemas';
@@ -123,6 +124,17 @@ export function createApp(runtime: ApiRuntime) {
       const company = await queries.getCompany(result.getValue().id.value);
       return c.json(company, 201);
     })
+    .patch('/api/companies/:companyId', jsonBody(createCompanySchema), async (c) => {
+      const result = await useCases.reviseTargetCompany.execute({
+        companyId: c.req.param('companyId'),
+        ...c.req.valid('json'),
+      });
+      if (result.isFailure()) {
+        return domainError(c, result.getError());
+      }
+      const company = await queries.getCompany(c.req.param('companyId'));
+      return c.json(company);
+    })
     .post('/api/companies/:companyId/questions', jsonBody(addQuestionSchema), async (c) => {
       const companyId = c.req.param('companyId');
       const result = await useCases.addStockedReverseQuestion.execute({
@@ -165,6 +177,22 @@ export function createApp(runtime: ApiRuntime) {
         }
         const application = await queries.getApplication(applicationId);
         return c.json({ sessionId: result.getValue().sessionId, application }, 201);
+      }
+    )
+    .patch(
+      '/api/applications/:applicationId/interviews/:sessionId',
+      jsonBody(reviseInterviewSchema),
+      async (c) => {
+        const applicationId = c.req.param('applicationId');
+        const result = await useCases.reviseInterview.execute({
+          applicationId,
+          sessionId: c.req.param('sessionId'),
+          ...c.req.valid('json'),
+        });
+        if (result.isFailure()) {
+          return domainError(c, result.getError());
+        }
+        return c.json(await queries.getApplication(applicationId));
       }
     )
     .post(

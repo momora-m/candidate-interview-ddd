@@ -119,6 +119,21 @@ export class InterviewSession extends Entity<InterviewSessionId> {
     return Result.ok(undefined);
   }
 
+  public reviseArrangement(props: {
+    timeWindow: TimeWindow;
+    format: InterviewFormat;
+    interviewerNames: readonly string[];
+  }): Result<void> {
+    if (this._isCompleted) {
+      return Result.fail('完了済みの面接セッションは訂正できません。');
+    }
+    this._timeWindow = props.timeWindow;
+    this._format = props.format;
+    this._interviewerNames = props.interviewerNames.map((name) => name.trim()).filter(Boolean);
+    this._updatedAt = new Date();
+    return Result.ok(undefined);
+  }
+
   public assignQuestion(question: AssignedReverseQuestion): Result<void> {
     const existing = this._assignedQuestions.find((q) => q.id === question.id);
     if (existing) {

@@ -5,7 +5,8 @@ import { PipelineView } from '@/components/Views/PipelineView';
 import { CompanyIntelligenceView } from '@/components/Views/CompanyIntelligenceView';
 import { ScheduleManagerView } from '@/components/Views/ScheduleManagerView';
 import { DomainExplorerView } from '@/components/Views/DomainExplorerView';
-import { ScheduleInterviewModal } from '@/components/Modals/ScheduleInterviewModal';
+import { InterviewRevisionTarget, ScheduleInterviewModal } from '@/components/Modals/ScheduleInterviewModal';
+import { InterviewSessionDTO, TargetCompanyDTO } from '@/application/dtos/CandidateApplicationDTOs';
 import { RecordReflectionModal } from '@/components/Modals/RecordReflectionModal';
 import { AssignQuestionModal } from '@/components/Modals/AssignQuestionModal';
 import { AddStockedQuestionModal } from '@/components/Modals/AddStockedQuestionModal';
@@ -20,6 +21,7 @@ export const AppContent: React.FC = () => {
   // Modal States
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleDefaultAppId, setScheduleDefaultAppId] = useState<string | undefined>(undefined);
+  const [interviewRevision, setInterviewRevision] = useState<InterviewRevisionTarget | null>(null);
 
   const [reflectionModalOpen, setReflectionModalOpen] = useState(false);
   const [reflectionData, setReflectionData] = useState<{
@@ -40,13 +42,26 @@ export const AppContent: React.FC = () => {
   const [addStockedCompanyId, setAddStockedCompanyId] = useState<string | undefined>(undefined);
 
   const [addCompanyModalOpen, setAddCompanyModalOpen] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<TargetCompanyDTO | null>(null);
   const [createAppModalOpen, setCreateAppModalOpen] = useState(false);
 
   const [addTodoModalOpen, setAddTodoModalOpen] = useState(false);
   const [addTodoAppId, setAddTodoAppId] = useState<string>('');
 
+  const closeScheduleModal = () => {
+    setScheduleModalOpen(false);
+    setInterviewRevision(null);
+  };
+
   const openScheduleModal = (appId?: string) => {
+    setInterviewRevision(null);
     setScheduleDefaultAppId(appId);
+    setScheduleModalOpen(true);
+  };
+
+  const openInterviewRevision = (applicationId: string, session: InterviewSessionDTO) => {
+    setInterviewRevision({ applicationId, session });
+    setScheduleDefaultAppId(applicationId);
     setScheduleModalOpen(true);
   };
 
@@ -93,6 +108,7 @@ export const AppContent: React.FC = () => {
         {activeTab === 'pipeline' && (
           <PipelineView
             onOpenScheduleModal={openScheduleModal}
+            onOpenEditInterview={openInterviewRevision}
             onOpenReflectionModal={openReflectionModal}
             onOpenAssignQuestionModal={openAssignQuestionModal}
             onOpenAddTodoModal={openAddTodoModal}
@@ -101,12 +117,21 @@ export const AppContent: React.FC = () => {
 
         {activeTab === 'companies' && (
           <CompanyIntelligenceView
-            onOpenAddCompanyModal={() => setAddCompanyModalOpen(true)}
+            onOpenAddCompanyModal={() => {
+              setEditingCompany(null);
+              setAddCompanyModalOpen(true);
+            }}
+            onOpenEditCompany={(company) => {
+              setEditingCompany(company);
+              setAddCompanyModalOpen(true);
+            }}
             onOpenAddQuestionModal={openAddStockedQuestionModal}
           />
         )}
 
-        {activeTab === 'schedule' && <ScheduleManagerView />}
+        {activeTab === 'schedule' && (
+          <ScheduleManagerView onOpenEditInterview={openInterviewRevision} />
+        )}
 
         {activeTab === 'domain' && <DomainExplorerView />}
       </main>
@@ -119,8 +144,9 @@ export const AppContent: React.FC = () => {
       {/* Modals */}
       <ScheduleInterviewModal
         isOpen={scheduleModalOpen}
-        onClose={() => setScheduleModalOpen(false)}
+        onClose={closeScheduleModal}
         defaultApplicationId={scheduleDefaultAppId}
+        revision={interviewRevision}
       />
 
       {reflectionData && (
@@ -158,7 +184,11 @@ export const AppContent: React.FC = () => {
 
       <AddCompanyModal
         isOpen={addCompanyModalOpen}
-        onClose={() => setAddCompanyModalOpen(false)}
+        onClose={() => {
+          setAddCompanyModalOpen(false);
+          setEditingCompany(null);
+        }}
+        company={editingCompany}
       />
 
       <CreateApplicationModal

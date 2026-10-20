@@ -12,6 +12,7 @@ import type { IDomainEvent } from '@/domain/shared/DomainEvent';
 
 const COMPANY_EVENT_TYPES = new Set([
   'TARGET_COMPANY_REGISTERED',
+  'TARGET_COMPANY_REVISED',
   'STOCKED_REVERSE_QUESTION_ADDED',
   'STOCKED_REVERSE_QUESTION_REMOVED',
 ]);

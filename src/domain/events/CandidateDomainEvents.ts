@@ -17,6 +17,21 @@ export class InterviewSessionScheduledEvent extends BaseDomainEvent {
   }
 }
 
+export class InterviewSessionRevisedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly sessionId: string,
+    public readonly previousSummary: string,
+    public readonly nextSummary: string
+  ) {
+    super(aggregateId, 'INTERVIEW_SESSION_REVISED', {
+      sessionId,
+      previousSummary,
+      nextSummary,
+    });
+  }
+}
+
 export class InterviewSessionRescheduledEvent extends BaseDomainEvent {
   constructor(
     aggregateId: string,
@@ -220,6 +235,15 @@ export class JobApplicationOpenedEvent extends BaseDomainEvent {
       positionTitle,
       stageCode,
     });
+  }
+}
+
+export class TargetCompanyRevisedEvent extends BaseDomainEvent {
+  constructor(
+    aggregateId: string,
+    public readonly name: string
+  ) {
+    super(aggregateId, 'TARGET_COMPANY_REVISED', { name });
   }
 }
 

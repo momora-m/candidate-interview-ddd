@@ -5,6 +5,7 @@ import {
   Layers,
   HelpCircle,
   Plus,
+  Pencil,
   ExternalLink,
   Target,
   Sparkles,
@@ -17,11 +18,13 @@ import { TargetCompanyDTO } from '@/application/dtos/CandidateApplicationDTOs';
 
 interface CompanyIntelligenceViewProps {
   onOpenAddCompanyModal: () => void;
+  onOpenEditCompany: (company: TargetCompanyDTO) => void;
   onOpenAddQuestionModal: (companyId: string) => void;
 }
 
 export const CompanyIntelligenceView: React.FC<CompanyIntelligenceViewProps> = ({
   onOpenAddCompanyModal,
+  onOpenEditCompany,
   onOpenAddQuestionModal,
 }) => {
   const { companies } = useApp();
@@ -111,13 +114,22 @@ export const CompanyIntelligenceView: React.FC<CompanyIntelligenceViewProps> = (
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => onOpenAddQuestionModal(selectedCompany.id)}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-lg transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>逆質問を追加</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onOpenEditCompany(selectedCompany)}
+                    className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>企業情報を訂正</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenAddQuestionModal(selectedCompany.id)}
+                    className="flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>逆質問を追加</span>
+                  </button>
+                </div>
               </div>
 
               {/* Business Model VO & Tech Stack VO */}

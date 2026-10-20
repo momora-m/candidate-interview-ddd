@@ -62,7 +62,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * 志望企業の訂正
+         * @description 企業IDと逆質問ストックは保ったまま、企業名とプロフィールを差し替えます。 この企業を参照する選考の表示名も更新されます。
+         */
+        patch: operations["reviseCompany"];
         trace?: never;
     };
     "/api/companies/{companyId}/questions": {
@@ -241,6 +245,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/applications/{applicationId}/interviews/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 確定面接の訂正
+         * @description 未完了の面接セッションについて、開始・終了、開催形式、面接官名を差し替えます。 セッションIDとステージは変わりません。完了済みの面接は訂正できません。 訂正後の形式で移動・準備バッファを再検証し、紐づく未完了TODOの期限を新しい開始時刻に合わせます。
+         */
+        patch: operations["reviseInterview"];
         trace?: never;
     };
     "/api/applications/{applicationId}/interviews/{sessionId}/questions": {
@@ -552,8 +576,10 @@ export interface components {
             /** @example オンライン (ZOOM): https://zoom.us/j/123456789 */
             formatSummary: string;
             meetingUrl?: string | null;
+            meetingPasscode?: string | null;
             locationName?: string | null;
             roomName?: string | null;
+            receptionInstructions?: string | null;
             /** @example 10 */
             travelBufferMinutes: number;
             /**
@@ -760,6 +786,20 @@ export interface components {
             estimatedTravelMinutes?: number;
             interviewerNames?: string[];
         };
+        ReviseInterviewRequest: {
+            /** Format: date-time */
+            startTime: string;
+            /** Format: date-time */
+            endTime: string;
+            formatType: components["schemas"]["FormatType"];
+            meetingUrl?: string;
+            meetingPasscode?: string;
+            locationName?: string;
+            roomName?: string;
+            receptionInstructions?: string;
+            estimatedTravelMinutes?: number;
+            interviewerNames?: string[];
+        };
         RescheduleInterviewRequest: {
             /** Format: date-time */
             newStartTime: string;
@@ -916,6 +956,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TargetCompany"];
+                };
+            };
+            /** @description 企業が存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reviseCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 志望企業ID */
+                companyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description 志望企業の訂正成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetCompany"];
+                };
+            };
+            /** @description 入力バリデーションエラー */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
             /** @description 企業が存在しない */
@@ -1374,6 +1459,60 @@ export interface operations {
                 };
             };
             /** @description 日程変更先での重複衝突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reviseInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                applicationId: string;
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviseInterviewRequest"];
+            };
+        };
+        responses: {
+            /** @description 面接訂正成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplication"];
+                };
+            };
+            /** @description 入力値不正、または完了済み面接 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            /** @description 応募または面接セッションが見つからない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 訂正後の日時が他の予定と重複する */
             409: {
                 headers: {
                     [name: string]: unknown;

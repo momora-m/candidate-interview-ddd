@@ -28,6 +28,10 @@ export class CandidateAppContainer {
     return this.runtime.useCases.createTargetCompany;
   }
 
+  public get reviseTargetCompany() {
+    return this.runtime.useCases.reviseTargetCompany;
+  }
+
   public get addStockedReverseQuestion() {
     return this.runtime.useCases.addStockedReverseQuestion;
   }
@@ -58,6 +62,10 @@ export class CandidateAppContainer {
 
   public get rescheduleInterview() {
     return this.runtime.useCases.rescheduleInterview;
+  }
+
+  public get reviseInterview() {
+    return this.runtime.useCases.reviseInterview;
   }
 
   public get assignReverseQuestion() {

@@ -11,6 +11,7 @@ import {
   Award,
   AlertTriangle,
   Plus,
+  Pencil,
   Video,
   MapPin,
   Star,
@@ -25,6 +26,7 @@ import { STAGE_DEFINITIONS, StageCode } from '@/domain/application/SelectionStag
 
 interface PipelineViewProps {
   onOpenScheduleModal: (appId?: string) => void;
+  onOpenEditInterview: (applicationId: string, session: InterviewSessionDTO) => void;
   onOpenReflectionModal: (appId: string, sessionId: string, companyName: string, stageLabel: string) => void;
   onOpenAssignQuestionModal: (appId: string, sessionId: string, companyId: string) => void;
   onOpenAddTodoModal: (appId: string) => void;
@@ -32,6 +34,7 @@ interface PipelineViewProps {
 
 export const PipelineView: React.FC<PipelineViewProps> = ({
   onOpenScheduleModal,
+  onOpenEditInterview,
   onOpenReflectionModal,
   onOpenAssignQuestionModal,
   onOpenAddTodoModal,
@@ -409,6 +412,16 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                             )}
                             <span>{session.formatSummary}</span>
                           </span>
+
+                          {!session.isCompleted && (
+                            <button
+                              onClick={() => onOpenEditInterview(selectedApp.id, session)}
+                              className="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center space-x-1 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>訂正</span>
+                            </button>
+                          )}
 
                           {!session.reflection && (
                             <button

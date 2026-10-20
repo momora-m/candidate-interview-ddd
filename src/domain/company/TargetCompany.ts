@@ -4,6 +4,7 @@ import {
   StockedReverseQuestionAddedEvent,
   StockedReverseQuestionRemovedEvent,
   TargetCompanyRegisteredEvent,
+  TargetCompanyRevisedEvent,
 } from '../events/CandidateDomainEvents';
 import { CompanyId } from './CompanyId';
 import { CompanyProfile } from './CompanyProfile';
@@ -85,6 +86,17 @@ export class TargetCompany extends AggregateRoot<CompanyId> {
   public updateProfile(newProfile: CompanyProfile): void {
     this._profile = newProfile;
     this._updatedAt = new Date();
+  }
+
+  public revise(name: string, profile: CompanyProfile): Result<void> {
+    if (!name || name.trim().length === 0) {
+      return Result.fail('企業名は必須です。');
+    }
+    this._name = name.trim();
+    this._profile = profile;
+    this._updatedAt = new Date();
+    this.addDomainEvent(new TargetCompanyRevisedEvent(this.id.value, this._name));
+    return Result.ok(undefined);
   }
 
   public addStockedQuestion(question: StockedReverseQuestion): Result<void> {

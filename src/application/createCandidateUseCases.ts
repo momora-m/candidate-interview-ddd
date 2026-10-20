@@ -8,6 +8,8 @@ import { CreateJobApplicationUseCase } from '@/application/use-cases/CreateJobAp
 import { DecideAfterCasualInterviewUseCase } from '@/application/use-cases/DecideAfterCasualInterviewUseCase';
 import { ProposeScheduleUseCase } from '@/application/use-cases/ProposeScheduleUseCase';
 import { CreateTargetCompanyUseCase } from '@/application/use-cases/CreateTargetCompanyUseCase';
+import { ReviseInterviewUseCase } from '@/application/use-cases/ReviseInterviewUseCase';
+import { ReviseTargetCompanyUseCase } from '@/application/use-cases/ReviseTargetCompanyUseCase';
 import { RecordInterviewReflectionUseCase } from '@/application/use-cases/RecordInterviewReflectionUseCase';
 import { RecordQuestionAnswerUseCase } from '@/application/use-cases/RecordQuestionAnswerUseCase';
 import { RejectOrWithdrawApplicationUseCase } from '@/application/use-cases/RejectOrWithdrawApplicationUseCase';
@@ -19,6 +21,7 @@ import type { ITargetCompanyRepository } from '@/domain/repositories/ITargetComp
 
 export interface CandidateUseCases {
   createTargetCompany: CreateTargetCompanyUseCase;
+  reviseTargetCompany: ReviseTargetCompanyUseCase;
   addStockedReverseQuestion: AddStockedReverseQuestionUseCase;
   createJobApplication: CreateJobApplicationUseCase;
   scheduleInterview: ScheduleInterviewUseCase;
@@ -27,6 +30,7 @@ export interface CandidateUseCases {
   cancelProposedSchedule: CancelProposedScheduleUseCase;
   decideAfterCasualInterview: DecideAfterCasualInterviewUseCase;
   rescheduleInterview: RescheduleInterviewUseCase;
+  reviseInterview: ReviseInterviewUseCase;
   assignReverseQuestion: AssignReverseQuestionUseCase;
   recordQuestionAnswer: RecordQuestionAnswerUseCase;
   recordInterviewReflection: RecordInterviewReflectionUseCase;
@@ -42,6 +46,7 @@ export function createCandidateUseCases(
 ): CandidateUseCases {
   return {
     createTargetCompany: new CreateTargetCompanyUseCase(companyRepo),
+    reviseTargetCompany: new ReviseTargetCompanyUseCase(companyRepo),
     addStockedReverseQuestion: new AddStockedReverseQuestionUseCase(companyRepo),
     createJobApplication: new CreateJobApplicationUseCase(applicationRepo, companyRepo),
     scheduleInterview: new ScheduleInterviewUseCase(applicationRepo),
@@ -50,6 +55,7 @@ export function createCandidateUseCases(
     cancelProposedSchedule: new CancelProposedScheduleUseCase(applicationRepo),
     decideAfterCasualInterview: new DecideAfterCasualInterviewUseCase(applicationRepo),
     rescheduleInterview: new RescheduleInterviewUseCase(applicationRepo),
+    reviseInterview: new ReviseInterviewUseCase(applicationRepo),
     assignReverseQuestion: new AssignReverseQuestionUseCase(applicationRepo, companyRepo),
     recordQuestionAnswer: new RecordQuestionAnswerUseCase(applicationRepo),
     recordInterviewReflection: new RecordInterviewReflectionUseCase(applicationRepo),

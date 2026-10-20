@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Building2, Plus } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { TargetCompanyDTO } from '@/application/dtos/CandidateApplicationDTOs';
 import { TargetAudience } from '@/domain/company/BusinessModel';
 import { CloudPlatformType } from '@/domain/company/TechStackProfile';
 
 interface AddCompanyModalProps {
   isOpen: boolean;
   onClose: () => void;
+  company?: TargetCompanyDTO | null;
 }
 
-export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({ isOpen, onClose }) => {
-  const { createTargetCompany } = useApp();
+export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
+  isOpen,
+  onClose,
+  company = null,
+}) => {
+  const { createTargetCompany, reviseTargetCompany } = useApp();
 
   const [name, setName] = useState('');
   const [productSummary, setProductSummary] = useState('');
@@ -26,6 +32,30 @@ export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({ isOpen, onClos
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const formKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = isOpen ? (company?.id ?? 'new') : null;
+    if (formKey.current === key) {
+      return;
+    }
+    formKey.current = key;
+    if (!isOpen) {
+      return;
+    }
+    setError(null);
+    setName(company?.name ?? '');
+    setProductSummary(company?.businessModel.productSummary ?? '');
+    setTargetAudience(company?.businessModel.targetAudience ?? 'B2B_ENTERPRISE');
+    setRevenueStream(company?.businessModel.revenueStream ?? 'SaaSサブスクリプション');
+    setCompetitors(company?.businessModel.keyCompetitors.join(', ') ?? '');
+    setLanguages(company?.techStack.primaryLanguages.join(', ') ?? 'TypeScript, Go');
+    setCloudPlatform(company?.techStack.cloudPlatform ?? 'GCP');
+    setArchitecture(company?.techStack.architectureHighlights.join(', ') ?? 'Cloud Run, DDD, PostgreSQL');
+    setTechBlogs(company?.techStack.techBlogUrls.join('\n') ?? '');
+    setAttractiveness(company?.overallAttractivenessSummary ?? '');
+    setMission(company?.corporateMission ?? '');
+  }, [isOpen, company]);
 
   if (!isOpen) return null;
 
@@ -35,7 +65,7 @@ export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({ isOpen, onClos
     setSubmitting(true);
 
     try {
-      const res = await createTargetCompany({
+      const payload = {
         name,
         productSummary,
         targetAudience,
@@ -47,14 +77,17 @@ export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({ isOpen, onClos
         techBlogUrls: techBlogs.split('\n').map((s) => s.trim()).filter(Boolean),
         overallAttractivenessSummary: attractiveness || undefined,
         corporateMission: mission || undefined,
-      });
+      };
+      const res = company
+        ? await reviseTargetCompany({ companyId: company.id, ...payload })
+        : await createTargetCompany(payload);
 
       if (res.success) {
         onClose();
         setName('');
         setProductSummary('');
       } else {
-        setError(res.error || '企業の登録に失敗しました。');
+        setError(res.error || (company ? '企業の訂正に失敗しました。' : '企業の登録に失敗しました。'));
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
@@ -72,8 +105,14 @@ export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({ isOpen, onClos
               <Building2 className="w-4 h-4 text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">志望企業プロファイルの登録</h2>
-              <p className="text-xs text-slate-400">ビジネスモデル・技術スタック・企業魅力を集約化します</p>
+              <h2 className="text-base font-semibold text-white">
+                {company ? '志望企業プロファイルの訂正' : '志望企業プロファイルの登録'}
+              </h2>
+              <p className="text-xs text-slate-400">
+                {company
+                  ? '企業IDと逆質問ストックはそのまま、名前とプロフィールを更新します'
+                  : 'ビジネスモデル・技術スタック・企業魅力を集約化します'}
+              </p>
             </div>
           </div>
           <button
@@ -229,7 +268,7 @@ export const AddCompanyModal: React.FC<AddCompanyModalProps> = ({ isOpen, onClos
               className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg shadow-md shadow-indigo-600/30 transition-all flex items-center space-x-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>{submitting ? '登録中...' : '企業集約を登録'}</span>
+              <span>{submitting ? '保存中...' : company ? '訂正を保存' : '企業集約を登録'}</span>
             </button>
           </div>
         </form>

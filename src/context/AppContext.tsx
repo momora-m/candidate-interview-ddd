@@ -14,6 +14,8 @@ import { RecordQuestionAnswerCommand } from '@/application/use-cases/RecordQuest
 import { AssignReverseQuestionCommand } from '@/application/use-cases/AssignReverseQuestionUseCase';
 import { AddStockedReverseQuestionCommand } from '@/application/use-cases/AddStockedReverseQuestionUseCase';
 import { CreateTargetCompanyCommand } from '@/application/use-cases/CreateTargetCompanyUseCase';
+import { ReviseInterviewCommand } from '@/application/use-cases/ReviseInterviewUseCase';
+import { ReviseTargetCompanyCommand } from '@/application/use-cases/ReviseTargetCompanyUseCase';
 import { CreateJobApplicationCommand } from '@/application/use-cases/CreateJobApplicationUseCase';
 import { AddCustomTodoCommand } from '@/application/use-cases/AddCustomTodoUseCase';
 
@@ -26,6 +28,7 @@ interface AppContextType {
   loadError: string | null;
   refresh: () => Promise<DomainEventDTO[]>;
   scheduleInterview: (cmd: ScheduleInterviewCommand) => Promise<{ success: boolean; error?: string }>;
+  reviseInterview: (cmd: ReviseInterviewCommand) => Promise<{ success: boolean; error?: string }>;
   proposeSchedule: (cmd: ProposeScheduleCommand) => Promise<{ success: boolean; error?: string }>;
   confirmProposedSchedule: (
     applicationId: string,
@@ -50,6 +53,7 @@ interface AppContextType {
   acceptOffer: (appId: string) => Promise<{ success: boolean; error?: string }>;
   rejectOrWithdraw: (appId: string, action: 'REJECT' | 'WITHDRAW', reason?: string) => Promise<{ success: boolean; error?: string }>;
   createTargetCompany: (cmd: CreateTargetCompanyCommand) => Promise<{ success: boolean; error?: string }>;
+  reviseTargetCompany: (cmd: ReviseTargetCompanyCommand) => Promise<{ success: boolean; error?: string }>;
   addStockedQuestion: (cmd: AddStockedReverseQuestionCommand) => Promise<{ success: boolean; error?: string }>;
   createJobApplication: (cmd: CreateJobApplicationCommand) => Promise<{ success: boolean; error?: string }>;
 }
@@ -138,6 +142,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         method: 'POST',
         body: JSON.stringify(body),
       });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
+  };
+
+  const reviseInterview = async (cmd: ReviseInterviewCommand) => {
+    try {
+      const { applicationId, sessionId, ...body } = cmd;
+      await apiRequest(
+        `/api/applications/${encodeURIComponent(applicationId)}/interviews/${encodeURIComponent(sessionId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        }
+      );
       await refresh();
       return { success: true };
     } catch (err) {
@@ -365,6 +386,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const reviseTargetCompany = async (cmd: ReviseTargetCompanyCommand) => {
+    try {
+      const { companyId, ...body } = cmd;
+      await apiRequest(`/api/companies/${encodeURIComponent(companyId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      await refresh();
+      return { success: true };
+    } catch (err) {
+      return failure(err);
+    }
+  };
+
   const addStockedQuestion = async (cmd: AddStockedReverseQuestionCommand) => {
     try {
       const { companyId, ...body } = cmd;
@@ -403,6 +438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loadError,
         refresh,
         scheduleInterview,
+        reviseInterview,
         proposeSchedule,
         confirmProposedSchedule,
         cancelProposedSchedule,
@@ -417,6 +453,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         acceptOffer,
         rejectOrWithdraw,
         createTargetCompany,
+        reviseTargetCompany,
         addStockedQuestion,
         createJobApplication,
       }}

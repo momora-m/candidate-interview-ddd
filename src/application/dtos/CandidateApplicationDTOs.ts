@@ -74,8 +74,10 @@ export interface InterviewSessionDTO {
   formatType: FormatType;
   formatSummary: string;
   meetingUrl?: string;
+  meetingPasscode?: string;
   locationName?: string;
   roomName?: string;
+  receptionInstructions?: string;
   travelBufferMinutes: number;
   interviewerNames: string[];
   assignedQuestions: AssignedReverseQuestionDTO[];

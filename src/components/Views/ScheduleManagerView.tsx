@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Calendar,
   Clock,
@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
+import { resolveSelectedApplicationId } from '@/components/resolveSelectedApplicationId';
 import { useApp } from '@/context/AppContext';
 import { CandidateScheduleConflictDomainService } from '@/domain/services/CandidateScheduleConflictDomainService';
 import { TimeWindow } from '@/domain/interview/TimeWindow';
@@ -19,7 +20,7 @@ import { JobApplication } from '@/domain/application/JobApplication';
 
 export const ScheduleManagerView: React.FC = () => {
   const { applications, proposeSchedule, confirmProposedSchedule, cancelProposedSchedule } = useApp();
-  const [proposalAppId, setProposalAppId] = useState(applications[0]?.id ?? '');
+  const [proposalAppId, setProposalAppId] = useState('');
   const [proposalDate, setProposalDate] = useState(() => {
     const day = new Date();
     day.setDate(day.getDate() + 5);
@@ -29,6 +30,10 @@ export const ScheduleManagerView: React.FC = () => {
   const [secondSlot, setSecondSlot] = useState('15:00');
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalMessage, setProposalMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProposalAppId((current) => resolveSelectedApplicationId(applications, current));
+  }, [applications]);
 
   // Conflict Simulator State
   const [testDate, setTestDate] = useState(() => {
@@ -63,6 +68,14 @@ export const ScheduleManagerView: React.FC = () => {
   const submitProposal = async () => {
     setProposalError(null);
     setProposalMessage(null);
+    if (!proposalAppId) {
+      setProposalError(
+        applications.some((application) => !application.isTerminal)
+          ? '対象の選考エントリーを選択してください。'
+          : '先に選考エントリーを登録してください。'
+      );
+      return;
+    }
     const slots = [firstSlot, secondSlot]
       .map((time) => time.trim())
       .filter(Boolean)

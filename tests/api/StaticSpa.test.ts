@@ -44,6 +44,19 @@ describe('static SPA', () => {
       assert.equal(companies.status, 200);
       assert.ok(Array.isArray(await companies.json()));
 
+      const emptyInterview = await app.request('/api/applications//interviews', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          startTime: '2026-12-01T01:00:00.000Z',
+          endTime: '2026-12-01T02:00:00.000Z',
+          formatType: 'ONLINE',
+          meetingUrl: 'https://zoom.us/j/1',
+        }),
+      });
+      assert.equal(emptyInterview.status, 404);
+      assert.deepEqual(await emptyInterview.json(), { error: '見つかりません。' });
+
       const health = await app.request('/health');
       assert.equal((await health.json()).status, 'ok');
 

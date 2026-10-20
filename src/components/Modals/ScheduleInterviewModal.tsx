@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Calendar, Clock, MapPin, Video, AlertTriangle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { StageCode, STAGE_DEFINITIONS } from '@/domain/application/SelectionStage';
+import { resolveSelectedApplicationId } from '@/components/resolveSelectedApplicationId';
 
 interface ScheduleInterviewModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
 }) => {
   const { applications, scheduleInterview } = useApp();
 
-  const [applicationId, setApplicationId] = useState(defaultApplicationId || applications[0]?.id || '');
+  const [applicationId, setApplicationId] = useState('');
   const [stageCode, setStageCode] = useState<StageCode>('FIRST_TECHNICAL');
   const [date, setDate] = useState(() => {
     const d = new Date();
@@ -35,6 +36,20 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const selectionKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = isOpen ? (defaultApplicationId ?? '') : null;
+    const contextChanged = selectionKey.current !== key;
+    selectionKey.current = key;
+    setApplicationId((current) =>
+      resolveSelectedApplicationId(
+        applications,
+        contextChanged ? '' : current,
+        defaultApplicationId
+      )
+    );
+  }, [isOpen, applications, defaultApplicationId]);
 
   if (!isOpen) return null;
 
@@ -42,6 +57,16 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+
+    if (!applicationId) {
+      setError(
+        applications.some((application) => !application.isTerminal)
+          ? '対象の選考エントリーを選択してください。'
+          : '先に選考エントリーを登録してください。'
+      );
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const [startHour, startMin] = startTimeStr.split(':').map(Number);

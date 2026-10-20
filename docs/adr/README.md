@@ -18,3 +18,4 @@
 | [ADR-0010](./0010-proposed-schedule-slots-and-cross-company-conflict-prevention.md) | 日程調整における候補日提示枠（Proposed Schedule Slots）の管理と複数社横断ブッキング防止方針 | 承認 (Accepted) | 2026-10-18 |
 | [ADR-0011](./0011-cloud-run-direct-iap-and-defense-in-depth-jwt-verification.md) | Google Cloud 最小構成（Cloud Run Direct IAP + Cloud SQL）と IAP JWT による多層防御認証方針 | 承認 (Accepted) | 2026-10-18 |
 | [ADR-0012](./0012-in-process-cqrs-transactional-outbox-and-sse-synchronization.md) | 単一コンテナ完結型 In-Process CQRS、Transactional Outbox、および SSE リアルタイム同期方針 | 承認 (Accepted) | 2026-10-18 |
+| [ADR-0013](./0013-candidate-identity-and-explicit-login-session.md) | IAP 検証済み Identity からの明示的ログインと候補者（CandidateId）単位のデータ分離方針 | 承認 (Accepted) | 2026-10-20 |
